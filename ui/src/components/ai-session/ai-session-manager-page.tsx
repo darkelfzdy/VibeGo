@@ -342,12 +342,6 @@ const AISessionManagerPage: React.FC = () => {
             void triggerRefresh();
           },
         },
-        {
-          icon: view === "settings" ? <History size={18} /> : <Settings2 size={18} />,
-          title:
-            view === "settings" ? t("plugin.aiSessionManager.backToSessions") : t("plugin.aiSessionManager.settings"),
-          onClick: () => setView((current) => (current === "settings" ? "list" : "settings")),
-        },
       ],
     },
     [isMobile, topBarTitle, refreshing, view, selectedSession, triggerRefresh, t]
@@ -632,7 +626,22 @@ const AISessionManagerPage: React.FC = () => {
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div className="rounded-lg border border-ide-border bg-ide-panel px-3 py-2">
             <div className="text-ide-mute">{t("plugin.aiSessionManager.totalSessions")}</div>
-            <div className="mt-1 text-base font-semibold text-ide-text">{filteredSessions.length}</div>
+            <div className="mt-1 flex items-center justify-between gap-2 text-base font-semibold text-ide-text">
+              <span>{filteredSessions.length}</span>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => setView((current) => (current === "settings" ? "list" : "settings"))}
+                className="text-ide-mute hover:text-ide-text"
+                aria-label={
+                  view === "settings"
+                    ? t("plugin.aiSessionManager.backToSessions")
+                    : t("plugin.aiSessionManager.settings")
+                }
+              >
+                {view === "settings" ? <History size={12} /> : <Settings2 size={12} />}
+              </Button>
+            </div>
           </div>
           <div className="rounded-lg border border-ide-border bg-ide-panel px-3 py-2">
             <div className="text-ide-mute">{t("plugin.aiSessionManager.sourceMode")}</div>
