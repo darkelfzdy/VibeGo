@@ -575,6 +575,22 @@
       "clear": "Clear",
       "placeholder": "Click keyboard to type here...",
       "eventLog": "Event Log"
+    },
+    "blockTerm": {
+      "name": "BlockTerm",
+      "title": "BlockTerm",
+      "run": "Run",
+      "stop": "Stop",
+      "clear": "Clear",
+      "ready": "Ready",
+      "connecting": "Connecting",
+      "disconnected": "Disconnected",
+      "running": "Running",
+      "newSession": "New Session",
+      "waitingOutput": "Waiting for output...",
+      "emptyTitle": "Block Terminal",
+      "emptyHint": "Commands become separate blocks for review, copy, and rerun. Interactive TUI programs switch into terminal mode automatically.",
+      "placeholder": "Enter shell command. Enter runs, Shift+Enter inserts a newline"
     }
   },
   "newPage": {

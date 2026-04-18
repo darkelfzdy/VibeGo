@@ -9,3 +9,4 @@ ui/CLAUDE.md
 /testdata
 /scripts/__pycache__
 ui/public/sherpa/
+/thirdparty/blockterm-demo

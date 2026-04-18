@@ -590,6 +590,22 @@
       "clear": "清除",
       "placeholder": "点击键盘在此处输入...",
       "eventLog": "事件日志"
+    },
+    "blockTerm": {
+      "name": "BlockTerm",
+      "title": "BlockTerm",
+      "run": "运行",
+      "stop": "停止",
+      "clear": "清空",
+      "ready": "就绪",
+      "connecting": "连接中",
+      "disconnected": "未连接",
+      "running": "运行中",
+      "newSession": "新会话",
+      "waitingOutput": "等待输出...",
+      "emptyTitle": "块状终端",
+      "emptyHint": "输入命令后会生成独立块，适合查看、复制和重跑历史命令。交互式 TUI 会自动进入终端舱。",
+      "placeholder": "输入 shell 命令，Enter 运行，Shift+Enter 换行"
     }
   },
   "newPage": {
