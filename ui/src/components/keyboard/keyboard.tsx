@@ -291,6 +291,8 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
 
 export const Keyboard: React.FC = () => {
   const { useNativeKeyboard, setUseNativeKeyboard } = useKeyboardStore();
+  const nativeKeyboardSetting = useSettingsStore((s) => s.settings.useNativeKeyboard === "true");
+  const shouldUseNativeKeyboard = nativeKeyboardSetting || useNativeKeyboard;
 
   const activeGroupId = useFrameStore((s) => s.activeGroupId);
   const activeTabId = useFrameStore((s) => s.getCurrentActiveTabId());
@@ -313,25 +315,33 @@ export const Keyboard: React.FC = () => {
     return false;
   }, []);
 
+  const restoreInputMode = useCallback((target: HTMLElement) => {
+    if (target.dataset.originalInputMode !== undefined) {
+      target.setAttribute("inputmode", target.dataset.originalInputMode || "text");
+    }
+  }, []);
+
+  const suppressNativeKeyboard = useCallback((target: HTMLElement) => {
+    if (target.getAttribute("inputmode") !== "none") {
+      target.dataset.originalInputMode = target.getAttribute("inputmode") || "text";
+      target.setAttribute("inputmode", "none");
+    }
+  }, []);
+
   const handleFocusIn = useCallback(
     (e: FocusEvent) => {
       if (checkFocusTimer.current) clearTimeout(checkFocusTimer.current);
       const target = e.target as HTMLElement;
       if (isEditable(target)) {
         setInputFocused(true);
-        if (!useNativeKeyboard) {
-          if (target.getAttribute("inputmode") !== "none") {
-            target.dataset.originalInputMode = target.getAttribute("inputmode") || "text";
-            target.setAttribute("inputmode", "none");
-          }
+        if (!shouldUseNativeKeyboard) {
+          suppressNativeKeyboard(target);
         } else {
-          if (target.dataset.originalInputMode !== undefined) {
-            target.setAttribute("inputmode", target.dataset.originalInputMode || "text");
-          }
+          restoreInputMode(target);
         }
       }
     },
-    [useNativeKeyboard, isEditable]
+    [isEditable, restoreInputMode, shouldUseNativeKeyboard, suppressNativeKeyboard]
   );
 
   const handleFocusOut = useCallback(() => {
@@ -349,17 +359,15 @@ export const Keyboard: React.FC = () => {
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       if (!target || !isEditable(target)) return;
+      if (useSettingsStore.getState().get("useNativeKeyboard") === "true") return;
       const state = useKeyboardStore.getState();
       if (state.useNativeKeyboard) {
         state.setUseNativeKeyboard(false);
-        if (target.getAttribute("inputmode") !== "none") {
-          target.dataset.originalInputMode = target.getAttribute("inputmode") || "text";
-          target.setAttribute("inputmode", "none");
-          target.dataset.ignoreBlur = "true";
-          target.blur();
-          target.dataset.ignoreBlur = "false";
-          target.focus();
-        }
+        suppressNativeKeyboard(target);
+        target.dataset.ignoreBlur = "true";
+        target.blur();
+        target.dataset.ignoreBlur = "false";
+        target.focus();
       }
     };
 
@@ -372,7 +380,7 @@ export const Keyboard: React.FC = () => {
       document.removeEventListener("pointerup", handleClick, true);
       if (checkFocusTimer.current) clearTimeout(checkFocusTimer.current);
     };
-  }, [handleFocusIn, handleFocusOut, isEditable]);
+  }, [handleFocusIn, handleFocusOut, isEditable, suppressNativeKeyboard]);
 
   useEffect(() => {
     const active = document.activeElement as HTMLElement | null;
@@ -384,16 +392,15 @@ export const Keyboard: React.FC = () => {
 
   useEffect(() => {
     const active = document.activeElement as HTMLElement | null;
-    if (isEditable(active)) {
+    if (active && isEditable(active)) {
       setInputFocused(true);
-      if (!useNativeKeyboard && active) {
-        if (active.getAttribute("inputmode") !== "none") {
-          active.dataset.originalInputMode = active.getAttribute("inputmode") || "text";
-          active.setAttribute("inputmode", "none");
-        }
+      if (!shouldUseNativeKeyboard) {
+        suppressNativeKeyboard(active);
+      } else {
+        restoreInputMode(active);
       }
     }
-  }, [useNativeKeyboard, isEditable]);
+  }, [isEditable, restoreInputMode, shouldUseNativeKeyboard, suppressNativeKeyboard]);
 
   const cursorTracker = {
     element: null as HTMLInputElement | HTMLTextAreaElement | null,
@@ -408,7 +415,7 @@ export const Keyboard: React.FC = () => {
         const active = document.activeElement as HTMLElement | null;
         if (active && isEditable(active)) {
           active.dataset.ignoreBlur = "true";
-          active.setAttribute("inputmode", active.dataset.originalInputMode || "text");
+          restoreInputMode(active);
           active.blur();
           active.dataset.ignoreBlur = "false";
           active.focus();
@@ -550,10 +557,10 @@ export const Keyboard: React.FC = () => {
         cursorTracker.cursor = -1;
       }
     },
-    [setUseNativeKeyboard, isEditable]
+    [setUseNativeKeyboard, isEditable, restoreInputMode]
   );
 
-  if (!showKeyboard || useNativeKeyboard || !inputFocused) return null;
+  if (!showKeyboard || shouldUseNativeKeyboard || !inputFocused) return null;
 
   return (
     <div

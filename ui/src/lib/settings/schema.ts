@@ -145,6 +145,14 @@ export const SETTINGS_SCHEMA: SettingSchema[] = [
     defaultValue: "",
   },
   {
+    key: "useNativeKeyboard",
+    type: "toggle",
+    category: "keyboard",
+    labelKey: "settings.useNativeKeyboard.label",
+    descriptionKey: "settings.useNativeKeyboard.description",
+    defaultValue: "false",
+  },
+  {
     key: "keyboardHaptic",
     type: "toggle",
     category: "keyboard",

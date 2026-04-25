@@ -302,6 +302,10 @@
       "label": "默认提交信息",
       "description": "打开 Git 页面或提交完成后自动填入的提交标题"
     },
+    "useNativeKeyboard": {
+      "label": "使用系统键盘",
+      "description": "禁用虚拟键盘，输入时使用系统自带键盘"
+    },
     "keyboardHaptic": {
       "label": "按键震动",
       "description": "按下虚拟键盘按键时触发震动反馈"

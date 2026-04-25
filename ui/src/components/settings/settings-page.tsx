@@ -9,6 +9,7 @@ import {
   Mail,
   RefreshCw,
   Settings,
+  Smartphone,
   User,
   Vibrate,
   Volume2,
@@ -46,6 +47,8 @@ const SettingItem: React.FC<{
         return <Mail size={18} />;
       case "gitDefaultCommitMessage":
         return <AlignLeft size={18} />;
+      case "useNativeKeyboard":
+        return <Smartphone size={18} />;
       case "keyboardHaptic":
         return <Vibrate size={18} />;
       case "keyboardSound":

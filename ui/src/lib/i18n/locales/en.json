@@ -293,6 +293,10 @@
       "label": "Default Commit Message",
       "description": "Auto-fill the commit title when opening Git view or after each commit"
     },
+    "useNativeKeyboard": {
+      "label": "Use Native Keyboard",
+      "description": "Disable the virtual keyboard and use the system keyboard for input"
+    },
     "keyboardHaptic": {
       "label": "Key Haptic",
       "description": "Vibrate when pressing virtual keyboard keys"

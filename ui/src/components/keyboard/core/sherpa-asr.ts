@@ -212,6 +212,33 @@ function downsample(buf: Float32Array, target: number): Float32Array {
   return out;
 }
 
+function mergeRecognizedText(parts: string[]): string {
+  let merged = "";
+
+  for (const part of parts) {
+    if (!part) continue;
+    if (!merged) {
+      merged = part;
+      continue;
+    }
+
+    if (merged.endsWith(part)) continue;
+
+    const maxOverlap = Math.min(merged.length, part.length);
+    let overlap = 0;
+    for (let size = maxOverlap; size > 0; size--) {
+      if (merged.endsWith(part.slice(0, size))) {
+        overlap = size;
+        break;
+      }
+    }
+
+    merged += part.slice(overlap);
+  }
+
+  return merged;
+}
+
 function recognizeAudio(samples: Float32Array): string {
   if (!vad || !recognizer) return "";
 
@@ -253,7 +280,7 @@ function recognizeAudio(samples: Float32Array): string {
 
   vad.reset();
   circularBuffer.free();
-  return results.join("");
+  return mergeRecognizedText(results);
 }
 
 export async function startRecording(onStatus: (status: SherpaStatus, progress?: string) => void): Promise<void> {
