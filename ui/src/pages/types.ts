@@ -20,9 +20,13 @@ export interface PageDefinition {
   id: PageId;
   name: string;
   nameKey?: string;
+  descriptionKey?: string;
   icon: LucideIcon;
   category: PageCategory;
   order?: number;
   singleton?: boolean;
+  newPageSettingKey?: string;
+  newPageDefaultVisible?: boolean;
+  tags?: { labelKey: string }[];
   View: React.ComponentType<PageViewProps>;
 }

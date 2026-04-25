@@ -15,9 +15,9 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { remoteApi } from "@/api/remote";
 import { usePageTopBar } from "@/hooks/use-page-top-bar";
 import { useTranslation } from "@/lib/i18n";
-import { useAppStore } from "@/stores/app-store";
 import { registerPage } from "@/pages/registry";
 import type { PageViewProps } from "@/pages/types";
+import { useAppStore } from "@/stores/app-store";
 
 const POLL_INTERVAL = 3000;
 
@@ -247,6 +247,7 @@ registerPage({
   id: "remote-control",
   name: "Remote Control",
   nameKey: "plugin.remoteControl.name",
+  descriptionKey: "plugin.remoteControl.description",
   icon: Radius,
   order: 15,
   category: "tool",

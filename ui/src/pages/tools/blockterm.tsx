@@ -12,10 +12,13 @@ registerPage({
   id: "blockterm",
   name: "BlockTerm",
   nameKey: "plugin.blockTerm.name",
+  descriptionKey: "plugin.blockTerm.description",
   icon: Blocks,
   category: "tool",
   order: 15,
   singleton: true,
+  newPageDefaultVisible: false,
+  tags: [{ labelKey: "pageTag.test" }],
   View: BlockTermView,
 });
 

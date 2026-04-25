@@ -238,8 +238,13 @@
       "editor": "编辑器",
       "terminal": "终端",
       "notification": "通知",
+      "page": "页面",
       "keyboard": "键盘",
       "git": "Git"
+    },
+    "pageVisibility": {
+      "label": "新建页面条目",
+      "description": "控制新建页面菜单中显示哪些功能。"
     },
     "theme": {
       "label": "主题",
@@ -422,6 +427,7 @@
     },
     "processMonitor": {
       "name": "进程监视器",
+      "description": "查看系统资源和进程列表，支持搜索、排序和终止进程。",
       "title": "进程监视器",
       "refresh": "刷新",
       "search": "搜索...",
@@ -473,6 +479,7 @@
     },
     "aiSessionManager": {
       "name": "AI 会话查看器",
+      "description": "浏览本机 AI 工具会话，支持搜索、查看详情和管理扫描源。",
       "settings": "扫描设置",
       "backToSessions": "返回会话",
       "loadFailed": "加载会话失败",
@@ -556,6 +563,7 @@
     },
     "remoteControl": {
       "name": "遥控器",
+      "description": "控制当前设备的音量、媒体播放和屏幕开关。",
       "title": "遥控器",
       "volume": "音量",
       "mute": "静音",
@@ -567,6 +575,7 @@
     },
     "portManager": {
       "name": "端口管理器",
+      "description": "查看监听端口、终止占用进程，并管理端口转发规则。",
       "title": "端口管理器",
       "refresh": "刷新",
       "search": "搜索...",
@@ -613,6 +622,7 @@
     },
     "keyboardTest": {
       "name": "键盘测试",
+      "description": "验证虚拟键盘输入、组合键和事件记录。",
       "title": "键盘测试",
       "clear": "清除",
       "placeholder": "点击键盘在此处输入...",
@@ -620,6 +630,7 @@
     },
     "blockTerm": {
       "name": "BlockTerm",
+      "description": "按命令块运行终端任务，便于查看输出、复制和重跑。",
       "title": "BlockTerm",
       "run": "运行",
       "stop": "停止",
@@ -637,6 +648,9 @@
   },
   "newPage": {
     "plugins": "插件"
+  },
+  "pageTag": {
+    "test": "测试"
   },
   "directoryPicker": {
     "title": "选择目录",

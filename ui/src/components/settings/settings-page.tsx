@@ -24,7 +24,10 @@ import { type AsrSource, asrApi } from "@/api/asr";
 import { preloadSpeechAssets } from "@/components/keyboard/core/sherpa-asr";
 import { useFrameController } from "@/framework/frame/controller";
 import { type Locale, useTranslation } from "@/lib/i18n";
+import { getNewPageVisibilitySettingKey, isPageVisibleInNewPage } from "@/lib/page-visibility";
 import { getSettingsByCategory, SETTING_CATEGORIES, type SettingSchema, useSettingsStore } from "@/lib/settings";
+import { pageRegistry } from "@/pages/registry";
+import type { PageDefinition } from "@/pages/types";
 import { requestTerminalNotificationPermission } from "@/services/terminal-notification-service";
 import { useFrameStore } from "@/stores/frame-store";
 
@@ -238,6 +241,7 @@ const SettingsPage: React.FC = () => {
   const [downloadingSpeechAssets, setDownloadingSpeechAssets] = useState(false);
   const [speechSources, setSpeechSources] = useState<AsrSource[]>([]);
   const activeTab = settingsGroup?.activeCategory || SETTING_CATEGORIES[0].key;
+  const toolPages = useMemo(() => pageRegistry.getAll().filter((page) => page.category === "tool"), []);
   const speechSourceOptions = useMemo(() => {
     if (speechSources.length === 0) {
       return [
@@ -283,6 +287,20 @@ const SettingsPage: React.FC = () => {
     toast.info(t("settings.notificationTest.toastTitle"), {
       description: t("settings.notificationTest.toastDescription"),
     });
+  };
+
+  const getPageName = (page: PageDefinition) => {
+    if (page.nameKey) {
+      const translated = t(page.nameKey);
+      if (translated !== page.nameKey) return translated;
+    }
+    return page.name;
+  };
+
+  const getPageDescription = (page: PageDefinition) => {
+    if (!page.descriptionKey) return "";
+    const translated = t(page.descriptionKey);
+    return translated === page.descriptionKey ? "" : translated;
   };
 
   useEffect(() => {
@@ -368,26 +386,89 @@ const SettingsPage: React.FC = () => {
     </div>
   );
 
+  const renderPageTab = () => (
+    <div className="p-4 bg-ide-bg rounded-lg border border-ide-border">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="text-ide-mute">
+          <Settings size={18} />
+        </div>
+        <div>
+          <div className="text-sm font-medium text-ide-text">{t("settings.pageVisibility.label")}</div>
+          <div className="text-xs text-ide-mute">{t("settings.pageVisibility.description")}</div>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {toolPages.map((page) => {
+          const enabled = isPageVisibleInNewPage(page, settings);
+          const IconComponent = page.icon;
+          const description = getPageDescription(page);
+          return (
+            <div
+              key={page.id}
+              className="flex items-center justify-between gap-4 p-3 bg-ide-panel/60 rounded-md border border-ide-border"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`shrink-0 transition-colors ${enabled ? "text-ide-accent" : "text-ide-mute"}`}>
+                  <IconComponent size={18} />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-medium text-ide-text">
+                    <span>{getPageName(page)}</span>
+                    {page.tags?.map((tag) => (
+                      <span
+                        key={tag.labelKey}
+                        className="px-1.5 py-0.5 text-[10px] leading-none border border-ide-border text-ide-mute bg-ide-bg rounded"
+                      >
+                        {t(tag.labelKey)}
+                      </span>
+                    ))}
+                  </div>
+                  {description && <div className="text-xs leading-5 text-ide-mute">{description}</div>}
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-pressed={enabled}
+                onClick={() =>
+                  void handleSettingChange(getNewPageVisibilitySettingKey(page), enabled ? "false" : "true")
+                }
+                className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors duration-200 focus:outline-none focus:border-ide-accent ${enabled ? "border-ide-accent bg-ide-accent/12" : "border-ide-border bg-ide-bg hover:border-ide-mute/40"}`}
+              >
+                <span
+                  className={`absolute left-0.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full border shadow-sm transition-all duration-200 ${enabled ? "translate-x-5 border-ide-accent bg-ide-accent" : "translate-x-0 border-ide-border bg-white"}`}
+                />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
     <div className="h-full overflow-y-auto bg-ide-bg">
       <div className="max-w-2xl mx-auto p-4">
         <div className="space-y-2">
           {activeTab === "notification"
             ? renderNotificationTab()
-            : categorySettings.map((schema) => (
-                <SettingItem
-                  key={schema.key}
-                  schema={schema}
-                  value={settings[schema.key] || schema.defaultValue}
-                  onChange={(v) => void handleSettingChange(schema.key, v)}
-                  t={t}
-                  sourceValue={settings.speechAssetSource || "auto"}
-                  sourceOptions={schema.key === "speechAssets" ? speechSourceOptions : undefined}
-                  onSourceChange={
-                    schema.key === "speechAssets" ? (v) => void handleSettingChange("speechAssetSource", v) : undefined
-                  }
-                />
-              ))}
+            : activeTab === "page"
+              ? renderPageTab()
+              : categorySettings.map((schema) => (
+                  <SettingItem
+                    key={schema.key}
+                    schema={schema}
+                    value={settings[schema.key] || schema.defaultValue}
+                    onChange={(v) => void handleSettingChange(schema.key, v)}
+                    t={t}
+                    sourceValue={settings.speechAssetSource || "auto"}
+                    sourceOptions={schema.key === "speechAssets" ? speechSourceOptions : undefined}
+                    onSourceChange={
+                      schema.key === "speechAssets"
+                        ? (v) => void handleSettingChange("speechAssetSource", v)
+                        : undefined
+                    }
+                  />
+                ))}
         </div>
       </div>
     </div>

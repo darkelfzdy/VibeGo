@@ -229,8 +229,13 @@
       "editor": "Editor",
       "terminal": "Terminal",
       "notification": "Notifications",
+      "page": "Pages",
       "keyboard": "Keyboard",
       "git": "Git"
+    },
+    "pageVisibility": {
+      "label": "New Page Items",
+      "description": "Control which features appear in the New Page menu."
     },
     "theme": {
       "label": "Theme",
@@ -407,6 +412,7 @@
     },
     "processMonitor": {
       "name": "Process Monitor",
+      "description": "View system resources and processes with search, sorting, and kill actions.",
       "title": "Process Monitor",
       "refresh": "Refresh",
       "search": "Search...",
@@ -458,6 +464,7 @@
     },
     "aiSessionManager": {
       "name": "AI Session Viewer",
+      "description": "Browse local AI tool sessions with search, details, and scan source controls.",
       "settings": "Scan Settings",
       "backToSessions": "Back to Sessions",
       "loadFailed": "Failed to load sessions",
@@ -541,6 +548,7 @@
     },
     "remoteControl": {
       "name": "Remote Control",
+      "description": "Control this device's volume, media playback, and screen power.",
       "title": "Remote Control",
       "volume": "Volume",
       "mute": "Mute",
@@ -552,6 +560,7 @@
     },
     "portManager": {
       "name": "Port Manager",
+      "description": "Inspect listening ports, kill owning processes, and manage forwarding rules.",
       "title": "Port Manager",
       "refresh": "Refresh",
       "search": "Search...",
@@ -598,6 +607,7 @@
     },
     "keyboardTest": {
       "name": "Keyboard Test",
+      "description": "Verify virtual keyboard input, modifier shortcuts, and event logs.",
       "title": "Keyboard Test",
       "clear": "Clear",
       "placeholder": "Click keyboard to type here...",
@@ -605,6 +615,7 @@
     },
     "blockTerm": {
       "name": "BlockTerm",
+      "description": "Run terminal commands as blocks for easier output review, copy, and rerun.",
       "title": "BlockTerm",
       "run": "Run",
       "stop": "Stop",
@@ -622,6 +633,9 @@
   },
   "newPage": {
     "plugins": "Plugins"
+  },
+  "pageTag": {
+    "test": "Test"
   },
   "directoryPicker": {
     "title": "Select Directory",

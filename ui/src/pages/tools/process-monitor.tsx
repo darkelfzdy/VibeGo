@@ -36,12 +36,12 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useCombinedStats, useProcessKill } from "@/hooks/use-process";
 import { usePageTopBar } from "@/hooks/use-page-top-bar";
+import { useCombinedStats, useProcessKill } from "@/hooks/use-process";
 import { getIntlLocale, useTranslation } from "@/lib/i18n";
-import { useAppStore } from "@/stores/app-store";
 import { registerPage } from "@/pages/registry";
 import type { PageViewProps } from "@/pages/types";
+import { useAppStore } from "@/stores/app-store";
 
 type SortField = "pid" | "name" | "cpuPercent" | "memPercent" | "status" | "numThreads" | "createTime";
 type SortDirection = "asc" | "desc";
@@ -877,6 +877,7 @@ registerPage({
   id: "process-monitor",
   name: "Process Monitor",
   nameKey: "plugin.processMonitor.name",
+  descriptionKey: "plugin.processMonitor.description",
   icon: Activity,
   order: 10,
   category: "tool",

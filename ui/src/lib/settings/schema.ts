@@ -210,6 +210,7 @@ export const SETTING_CATEGORIES = [
   { key: "editor", labelKey: "settings.category.editor" },
   { key: "terminal", labelKey: "settings.category.terminal" },
   { key: "notification", labelKey: "settings.category.notification" },
+  { key: "page", labelKey: "settings.category.page" },
   { key: "keyboard", labelKey: "settings.category.keyboard" },
   { key: "git", labelKey: "settings.category.git" },
 ];

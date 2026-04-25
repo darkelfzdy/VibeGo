@@ -1,11 +1,11 @@
 import { Keyboard as KeyboardIcon } from "lucide-react";
-import React, { useState, useRef, useCallback } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import type { KeyEvent } from "@/components/keyboard";
-import { useKeyboardStore } from "@/stores/keyboard-store";
+import { useTranslation } from "@/lib/i18n";
 import { registerPage } from "@/pages/registry";
 import type { PageViewProps } from "@/pages/types";
-import { useTranslation } from "@/lib/i18n";
 import { useAppStore } from "@/stores/app-store";
+import { useKeyboardStore } from "@/stores/keyboard-store";
 
 interface EventLogEntry {
   id: number;
@@ -451,10 +451,13 @@ registerPage({
   id: "keyboard-test",
   name: "Keyboard Test",
   nameKey: "plugin.keyboardTest.name",
+  descriptionKey: "plugin.keyboardTest.description",
   icon: KeyboardIcon,
   order: 20,
   category: "tool",
   singleton: true,
+  newPageDefaultVisible: false,
+  tags: [{ labelKey: "pageTag.test" }],
   View: KeyboardTestView,
 });
 

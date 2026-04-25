@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { usePageTopBar } from "@/hooks/use-page-top-bar";
 import {
   useAddForward,
   useForwardList,
@@ -37,11 +38,10 @@ import {
   useRemoveForward,
   useToggleForward,
 } from "@/hooks/use-port";
-import { usePageTopBar } from "@/hooks/use-page-top-bar";
 import { useTranslation } from "@/lib/i18n";
-import { useAppStore } from "@/stores/app-store";
 import { registerPage } from "@/pages/registry";
 import type { PageViewProps } from "@/pages/types";
+import { useAppStore } from "@/stores/app-store";
 
 function getRefreshOptions(t: (key: string) => string) {
   return [
@@ -639,6 +639,7 @@ registerPage({
   id: "port-manager",
   name: "Port Manager",
   nameKey: "plugin.portManager.name",
+  descriptionKey: "plugin.portManager.description",
   icon: Network,
   order: 12,
   category: "tool",

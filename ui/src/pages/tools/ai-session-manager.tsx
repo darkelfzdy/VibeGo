@@ -12,6 +12,7 @@ registerPage({
   id: "ai-session-manager",
   name: "AI Sessions",
   nameKey: "plugin.aiSessionManager.name",
+  descriptionKey: "plugin.aiSessionManager.description",
   icon: Bot,
   category: "tool",
   order: 20,
