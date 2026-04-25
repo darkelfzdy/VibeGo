@@ -314,6 +314,13 @@
       "label": "按键声音",
       "description": "按下虚拟键盘按键时播放仿 iOS 键盘按键音"
     },
+    "speechAssetSource": {
+      "label": "语音下载源",
+      "description": "选择语音模型资源下载源",
+      "optionAuto": "自动选择",
+      "optionOfficial": "官方源",
+      "optionChina": "中国镜像"
+    },
     "speechAssets": {
       "label": "语音识别资源",
       "description": "首次使用语音识别前，请先在这里下载离线语音识别资源",

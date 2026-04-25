@@ -139,9 +139,11 @@ func runServer(ctx context.Context) error {
 
 	handler.NewSystemHandler().Register(r)
 	asrService := asr.New(asr.Config{
-		Version: cfg.AsrVersion,
-		WasmURL: cfg.AsrWasmURL,
-		DataURL: cfg.AsrDataURL,
+		Version:          cfg.AsrVersion,
+		WasmURL:          cfg.AsrWasmURL,
+		DataURL:          cfg.AsrDataURL,
+		Source:           cfg.AsrSource,
+		ExtraSourcesJSON: cfg.AsrSources,
 	})
 
 	db := config.GetDB(

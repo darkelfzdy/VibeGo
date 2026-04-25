@@ -169,6 +169,19 @@ export const SETTINGS_SCHEMA: SettingSchema[] = [
     defaultValue: "true",
   },
   {
+    key: "speechAssetSource",
+    type: "select",
+    category: "keyboard",
+    labelKey: "settings.speechAssetSource.label",
+    descriptionKey: "settings.speechAssetSource.description",
+    defaultValue: "auto",
+    options: [
+      { value: "auto", label: "settings.speechAssetSource.optionAuto" },
+      { value: "official", label: "settings.speechAssetSource.optionOfficial" },
+      { value: "china", label: "settings.speechAssetSource.optionChina" },
+    ],
+  },
+  {
     key: "speechAssets",
     type: "action",
     category: "keyboard",

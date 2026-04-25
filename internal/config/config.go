@@ -35,6 +35,8 @@ type Config struct {
 	AsrVersion string
 	AsrWasmURL string
 	AsrDataURL string
+	AsrSource  string
+	AsrSources string
 
 	OS           string
 	DefaultShell string
@@ -76,6 +78,8 @@ func bindFlags(fs *flag.FlagSet, cfg *Config) (*bool, *bool) {
 	fs.StringVar(&cfg.AsrVersion, "asr-version", utils.GetEnv("VG_ASR_VERSION", ""), "ASR asset version for cache busting")
 	fs.StringVar(&cfg.AsrWasmURL, "asr-wasm-url", utils.GetEnv("VG_ASR_WASM_URL", ""), "ASR wasm asset URL")
 	fs.StringVar(&cfg.AsrDataURL, "asr-data-url", utils.GetEnv("VG_ASR_DATA_URL", ""), "ASR data asset URL")
+	fs.StringVar(&cfg.AsrSource, "asr-source", utils.GetEnv("VG_ASR_SOURCE", "auto"), "ASR asset source (auto, official, china, or custom id)")
+	fs.StringVar(&cfg.AsrSources, "asr-extra-sources", utils.GetEnv("VG_ASR_EXTRA_SOURCES", ""), "Extra ASR asset sources JSON")
 
 	defaultShell := ""
 	switch runtime.GOOS {

@@ -1,6 +1,7 @@
 import {
   AlignLeft,
   Bell,
+  CloudDownload,
   Download,
   Eye,
   EyeOff,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { type AsrSource, asrApi } from "@/api/asr";
 import { preloadSpeechAssets } from "@/components/keyboard/core/sherpa-asr";
 import { useFrameController } from "@/framework/frame/controller";
 import { type Locale, useTranslation } from "@/lib/i18n";
@@ -30,7 +32,10 @@ const SettingItem: React.FC<{
   value: string;
   onChange: (value: string) => void;
   t: (key: string) => string;
-}> = ({ schema, value, onChange, t }) => {
+  sourceValue?: string;
+  sourceOptions?: { value: string; label: string }[];
+  onSourceChange?: (value: string) => void;
+}> = ({ schema, value, onChange, t, sourceValue, sourceOptions, onSourceChange }) => {
   const getIcon = () => {
     switch (schema.key) {
       case "showHiddenFiles":
@@ -54,7 +59,7 @@ const SettingItem: React.FC<{
       case "keyboardSound":
         return <Volume2 size={18} />;
       case "speechAssets":
-        return <Download size={18} />;
+        return <CloudDownload size={18} />;
       default:
         return <Settings size={18} />;
     }
@@ -173,6 +178,27 @@ const SettingItem: React.FC<{
             {schema.descriptionKey && <div className="text-xs text-ide-mute">{t(schema.descriptionKey)}</div>}
           </div>
         </div>
+        {schema.key === "speechAssets" && sourceOptions && onSourceChange && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {sourceOptions.map((opt) => {
+              const label = opt.label.startsWith("settings.") ? t(opt.label) : opt.label;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => onSourceChange(opt.value)}
+                  className={`px-3 py-1.5 text-xs rounded-md border transition-all ${
+                    sourceValue === opt.value
+                      ? "bg-ide-accent text-ide-bg border-ide-accent"
+                      : "bg-ide-panel text-ide-text border-ide-border hover:border-ide-accent"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <button
           type="button"
           onClick={() => onChange("run")}
@@ -188,6 +214,12 @@ const SettingItem: React.FC<{
   return null;
 };
 
+function speechSourceLabel(source: AsrSource): string {
+  if (source.id === "official") return "settings.speechAssetSource.optionOfficial";
+  if (source.id === "china") return "settings.speechAssetSource.optionChina";
+  return source.label || source.id;
+}
+
 const SettingsPage: React.FC = () => {
   const settings = useSettingsStore((s) => s.settings);
   const loading = useSettingsStore((s) => s.loading);
@@ -201,7 +233,21 @@ const SettingsPage: React.FC = () => {
   const setSettingsActiveCategory = useFrameStore((s) => s.setSettingsActiveCategory);
 
   const [downloadingSpeechAssets, setDownloadingSpeechAssets] = useState(false);
+  const [speechSources, setSpeechSources] = useState<AsrSource[]>([]);
   const activeTab = settingsGroup?.activeCategory || SETTING_CATEGORIES[0].key;
+  const speechSourceOptions = useMemo(() => {
+    if (speechSources.length === 0) {
+      return [
+        { value: "auto", label: "settings.speechAssetSource.optionAuto" },
+        { value: "official", label: "settings.speechAssetSource.optionOfficial" },
+        { value: "china", label: "settings.speechAssetSource.optionChina" },
+      ];
+    }
+    const sourceOptions = speechSources
+      .filter((source) => source.id)
+      .map((source) => ({ value: source.id, label: speechSourceLabel(source) }));
+    return [{ value: "auto", label: "settings.speechAssetSource.optionAuto" }, ...sourceOptions];
+  }, [speechSources]);
 
   const handleSettingChange = async (key: string, value: string) => {
     if (key === "speechAssets") {
@@ -233,6 +279,15 @@ const SettingsPage: React.FC = () => {
   useEffect(() => {
     void initSettings();
   }, [initSettings]);
+
+  useEffect(() => {
+    void asrApi
+      .info()
+      .then((info) => {
+        if (Array.isArray(info.sources)) setSpeechSources(info.sources);
+      })
+      .catch(() => setSpeechSources([]));
+  }, []);
 
   const topBarCenterContent = useMemo(
     () => (
@@ -281,7 +336,7 @@ const SettingsPage: React.FC = () => {
     );
   }
 
-  const categorySettings = getSettingsByCategory(activeTab);
+  const categorySettings = getSettingsByCategory(activeTab).filter((schema) => schema.key !== "speechAssetSource");
 
   return (
     <div className="h-full overflow-y-auto bg-ide-bg">
@@ -294,6 +349,11 @@ const SettingsPage: React.FC = () => {
               value={settings[schema.key] || schema.defaultValue}
               onChange={(v) => void handleSettingChange(schema.key, v)}
               t={t}
+              sourceValue={settings.speechAssetSource || "auto"}
+              sourceOptions={schema.key === "speechAssets" ? speechSourceOptions : undefined}
+              onSourceChange={
+                schema.key === "speechAssets" ? (v) => void handleSettingChange("speechAssetSource", v) : undefined
+              }
             />
           ))}
         </div>

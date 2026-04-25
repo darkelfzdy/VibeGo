@@ -305,6 +305,13 @@
       "label": "Key Sound",
       "description": "Play iOS-style key press sound when typing"
     },
+    "speechAssetSource": {
+      "label": "Speech Download Source",
+      "description": "Choose the speech model download source",
+      "optionAuto": "Auto",
+      "optionOfficial": "Official",
+      "optionChina": "China Mirror"
+    },
     "speechAssets": {
       "label": "Speech Assets",
       "description": "Download offline speech recognition assets here before first use",
