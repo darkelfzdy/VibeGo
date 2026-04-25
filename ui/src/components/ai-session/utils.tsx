@@ -1,5 +1,5 @@
 import React from "react";
-import type { AIProviderId, AISessionMeta } from "@/types/ai-session";
+import type { AIProviderId, AISessionMessage, AISessionMeta } from "@/types/ai-session";
 
 export const providerOrder: AIProviderId[] = ["claude", "codex", "gemini", "opencode", "openclaw"];
 
@@ -121,4 +121,103 @@ export function buildSessionSearchText(session: AISessionMeta) {
   return [session.sessionId, session.title, session.summary, session.projectDir, session.sourcePath]
     .filter(Boolean)
     .join(" ");
+}
+
+export const MESSAGE_COLLAPSE_CHAR_THRESHOLD = 1800;
+export const MESSAGE_COLLAPSE_LINE_THRESHOLD = 28;
+export const MESSAGE_COLLAPSED_LENGTH = 900;
+
+export interface SessionOutlineItem {
+  index: number;
+  content: string;
+}
+
+const OUTLINE_TITLE_MAX_CHARS = 96;
+
+function truncateText(value: string, limit: number) {
+  const trimmed = value.trim();
+  if (trimmed.length <= limit) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, limit).trim()}...`;
+}
+
+function stripCodeBlocks(value: string) {
+  return value.replace(/```[\s\S]*?```/g, "\n");
+}
+
+function stripTaggedBlocks(value: string) {
+  return value
+    .replace(/<environment_context>[\s\S]*?<\/environment_context>/gi, "\n")
+    .replace(/<INSTRUCTIONS>[\s\S]*?<\/INSTRUCTIONS>/gi, "\n");
+}
+
+function isGeneratedContextMessage(value: string) {
+  const trimmed = value.trim();
+  const lower = trimmed.toLowerCase();
+  return (
+    lower.startsWith("# agents.md instructions") ||
+    lower.startsWith("<local-command-caveat>") ||
+    lower.startsWith("<command-name>") ||
+    lower.startsWith("knowledge cutoff:") ||
+    lower.includes("<local-command-caveat>")
+  );
+}
+
+function normalizeOutlineLine(value: string) {
+  return value
+    .replace(/^#{1,6}\s+/, "")
+    .replace(/^[-*+]\s+/, "")
+    .replace(/^\d+[.)]\s+/, "")
+    .replace(/^>\s+/, "")
+    .trim();
+}
+
+function isUsefulOutlineLine(value: string) {
+  if (!value || value === "```") {
+    return false;
+  }
+  if (/^<\/?[a-z][\w-]*(\s[^>]*)?>$/i.test(value)) {
+    return false;
+  }
+  if (/^\[[a-z_ -]+:\s*.+\]$/i.test(value)) {
+    return false;
+  }
+  return /[\p{L}\p{N}]/u.test(value);
+}
+
+function extractOutlineTitle(content: string) {
+  const trimmed = content.trim();
+  if (!trimmed || isGeneratedContextMessage(trimmed)) {
+    return "";
+  }
+  const cleaned = stripTaggedBlocks(stripCodeBlocks(trimmed));
+  const lines = cleaned.split(/\r?\n/).map(normalizeOutlineLine).filter(isUsefulOutlineLine);
+  const heading = lines.find((line) => line.length >= 4) || lines[0] || "";
+  return truncateText(heading, OUTLINE_TITLE_MAX_CHARS);
+}
+
+export function isLongAISessionMessage(content: string) {
+  return (
+    content.length > MESSAGE_COLLAPSE_CHAR_THRESHOLD || content.split(/\r?\n/).length > MESSAGE_COLLAPSE_LINE_THRESHOLD
+  );
+}
+
+export function buildSessionOutlineItems(messages: AISessionMessage[]): SessionOutlineItem[] {
+  const items: SessionOutlineItem[] = [];
+  for (const [index, message] of messages.entries()) {
+    if (message.role.toLowerCase() !== "user") {
+      continue;
+    }
+    const content = extractOutlineTitle(message.content);
+    if (!content) {
+      continue;
+    }
+    const previous = items[items.length - 1];
+    if (previous?.content.toLowerCase() === content.toLowerCase()) {
+      continue;
+    }
+    items.push({ index, content });
+  }
+  return items;
 }

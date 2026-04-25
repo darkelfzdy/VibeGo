@@ -529,6 +529,8 @@
       "clearSelection": "Clear selection",
       "expandContent": "Expand full content",
       "collapseContent": "Collapse",
+      "expandAllMessages": "Expand all long messages",
+      "collapseAllMessages": "Collapse all long messages",
       "deleting": "Deleting",
       "roleAssistant": "AI",
       "roleUser": "User",

@@ -544,6 +544,8 @@
       "clearSelection": "清空已选",
       "expandContent": "展开完整内容",
       "collapseContent": "收起",
+      "expandAllMessages": "展开全部长消息",
+      "collapseAllMessages": "收起全部长消息",
       "deleting": "删除中",
       "roleAssistant": "AI",
       "roleUser": "用户",

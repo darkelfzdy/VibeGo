@@ -2,6 +2,8 @@ import { ChevronDown, ChevronUp, Copy } from "lucide-react";
 import React from "react";
 import {
   formatDateTime,
+  isLongAISessionMessage,
+  MESSAGE_COLLAPSED_LENGTH,
   renderHighlightedText,
   roleLabel,
   roleLabelTone,
@@ -11,25 +13,32 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AISessionMessage } from "@/types/ai-session";
 
-const COLLAPSE_THRESHOLD = 3000;
-const COLLAPSED_LENGTH = 1500;
-
 interface SessionMessageItemProps {
   active: boolean;
+  expanded: boolean;
   locale: "en" | "zh";
   message: AISessionMessage;
   query: string;
   t: (key: string) => string;
   onCopy: (content: string) => void;
+  onExpandedChange: (expanded: boolean) => void;
 }
 
-const SessionMessageItem: React.FC<SessionMessageItemProps> = ({ active, locale, message, query, t, onCopy }) => {
-  const [expanded, setExpanded] = React.useState(false);
-  const isLong = message.content.length > COLLAPSE_THRESHOLD;
+const SessionMessageItem: React.FC<SessionMessageItemProps> = ({
+  active,
+  expanded,
+  locale,
+  message,
+  query,
+  t,
+  onCopy,
+  onExpandedChange,
+}) => {
+  const isLong = isLongAISessionMessage(message.content);
   const hasSearchMatch =
     isLong && !expanded && query.trim() && message.content.toLowerCase().includes(query.trim().toLowerCase());
   const collapsed = isLong && !expanded && !hasSearchMatch;
-  const displayContent = collapsed ? `${message.content.slice(0, COLLAPSED_LENGTH)}...` : message.content;
+  const displayContent = collapsed ? `${message.content.slice(0, MESSAGE_COLLAPSED_LENGTH)}...` : message.content;
 
   return (
     <div
@@ -62,7 +71,7 @@ const SessionMessageItem: React.FC<SessionMessageItemProps> = ({ active, locale,
         <button
           type="button"
           aria-expanded={expanded}
-          onClick={() => setExpanded((value) => !value)}
+          onClick={() => onExpandedChange(!expanded)}
           className="mt-2 inline-flex items-center gap-1 text-xs text-ide-mute transition-colors hover:text-ide-text"
         >
           {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}

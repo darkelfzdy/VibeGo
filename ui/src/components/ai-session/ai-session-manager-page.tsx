@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronLeft,
+  ChevronUp,
   Clock3,
   Copy,
   Database,
@@ -23,9 +24,11 @@ import SessionListItem from "@/components/ai-session/session-list-item";
 import SessionMessageItem from "@/components/ai-session/session-message-item";
 import SessionOutline from "@/components/ai-session/session-outline";
 import {
+  buildSessionOutlineItems,
   buildSessionSearchText,
   formatCount,
   formatDateTime,
+  isLongAISessionMessage,
   providerLabels,
   providerOrder,
 } from "@/components/ai-session/utils";
@@ -44,6 +47,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
+import { useFrameController } from "@/framework/frame/controller";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePageTopBar } from "@/hooks/use-page-top-bar";
 import { useTranslation } from "@/lib/i18n";
@@ -124,6 +128,7 @@ const AISessionManagerPage: React.FC = () => {
   const dialog = useDialog();
   const isMobile = useIsMobile();
   const openFolder = useSessionStore((s) => s.openFolder);
+  const { setPageMenuItems } = useFrameController();
   const { loading, refreshing, error, response, load, setResponse } = useAISessionData();
 
   const sessions = response?.sessions || [];
@@ -149,6 +154,7 @@ const AISessionManagerPage: React.FC = () => {
   const [pullDistance, setPullDistance] = React.useState(0);
   const [detailHeaderCollapsed, setDetailHeaderCollapsed] = React.useState(false);
   const [detailHeaderHeight, setDetailHeaderHeight] = React.useState(0);
+  const [expandedMessageIndexes, setExpandedMessageIndexes] = React.useState<Set<number>>(new Set());
 
   const detailHeaderRef = React.useRef<HTMLDivElement | null>(null);
   const listScrollRef = React.useRef<HTMLDivElement | null>(null);
@@ -208,9 +214,11 @@ const AISessionManagerPage: React.FC = () => {
       setDetailError("");
       setDetailSearch("");
       setDetailHeaderCollapsed(false);
+      setExpandedMessageIndexes(new Set());
       return;
     }
     setDetailHeaderCollapsed(false);
+    setExpandedMessageIndexes(new Set());
     setDetailLoading(true);
     setDetailError("");
     void aiSessionApi
@@ -257,17 +265,32 @@ const AISessionManagerPage: React.FC = () => {
     return messages.filter((message) => message.content.toLowerCase().includes(needle)).length;
   }, [detailSearch, messages]);
 
-  const outlineItems = React.useMemo(
-    () =>
-      messages
-        .map((message, index) => ({ message, index }))
-        .filter((item) => item.message.role.toLowerCase() === "user")
-        .map((item) => ({
-          index: item.index,
-          content: item.message.content.length > 80 ? `${item.message.content.slice(0, 80)}...` : item.message.content,
-        })),
+  const outlineItems = React.useMemo(() => buildSessionOutlineItems(messages), [messages]);
+
+  const longMessageIndexes = React.useMemo(
+    () => messages.flatMap((message, index) => (isLongAISessionMessage(message.content) ? [index] : [])),
     [messages]
   );
+
+  const expandAllMessages = React.useCallback(() => {
+    setExpandedMessageIndexes(new Set(longMessageIndexes));
+  }, [longMessageIndexes]);
+
+  const collapseAllMessages = React.useCallback(() => {
+    setExpandedMessageIndexes(new Set());
+  }, []);
+
+  const setMessageExpanded = React.useCallback((index: number, expanded: boolean) => {
+    setExpandedMessageIndexes((current) => {
+      const next = new Set(current);
+      if (expanded) {
+        next.add(index);
+      } else {
+        next.delete(index);
+      }
+      return next;
+    });
+  }, []);
 
   React.useLayoutEffect(() => {
     if (!isMobile || view !== "detail") {
@@ -346,6 +369,28 @@ const AISessionManagerPage: React.FC = () => {
     },
     [isMobile, topBarTitle, refreshing, view, selectedSession, triggerRefresh, t]
   );
+
+  React.useEffect(() => {
+    if (view !== "detail" || !selectedSession || longMessageIndexes.length === 0) {
+      setPageMenuItems([]);
+      return;
+    }
+    setPageMenuItems([
+      {
+        id: "ai-session-expand-all-messages",
+        icon: <ChevronDown size={20} />,
+        label: t("plugin.aiSessionManager.expandAllMessages"),
+        onClick: expandAllMessages,
+      },
+      {
+        id: "ai-session-collapse-all-messages",
+        icon: <ChevronUp size={20} />,
+        label: t("plugin.aiSessionManager.collapseAllMessages"),
+        onClick: collapseAllMessages,
+      },
+    ]);
+    return () => setPageMenuItems([]);
+  }, [collapseAllMessages, expandAllMessages, longMessageIndexes.length, selectedSession, setPageMenuItems, t, view]);
 
   React.useEffect(() => {
     if (!isMobile || view !== "list") {
@@ -1296,11 +1341,13 @@ const AISessionManagerPage: React.FC = () => {
                     <div key={`${message.role}-${index}`} id={`ai-session-message-${index}`} className="max-w-full">
                       <SessionMessageItem
                         active={activeMessageIndex === index}
+                        expanded={expandedMessageIndexes.has(index)}
                         locale={locale}
                         message={message}
                         query={detailSearch}
                         t={t}
                         onCopy={(content) => void copyText(content, "plugin.aiSessionManager.messageCopied")}
+                        onExpandedChange={(expanded) => setMessageExpanded(index, expanded)}
                       />
                     </div>
                   ))}
