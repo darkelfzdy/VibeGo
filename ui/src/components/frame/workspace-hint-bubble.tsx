@@ -1,7 +1,11 @@
-import { type FC, useCallback, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type FC, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { GenericGroup } from "@/stores/frame-store";
 
 export type WorkspaceHintPlacement = "right" | "top";
+
+const VIEWPORT_PADDING = 12;
+const BUBBLE_GAP = 8;
+const ARROW_PADDING = 12;
 
 interface AnchorRect {
   left: number;
@@ -17,8 +21,32 @@ interface WorkspaceHintState {
   placement: WorkspaceHintPlacement;
 }
 
+interface WorkspaceHintLayout {
+  left: number;
+  top: number;
+  arrowX: number;
+  arrowY: number;
+}
+
 function clamp(value: number, min: number, max: number): number {
+  if (max < min) return min;
   return Math.min(Math.max(value, min), max);
+}
+
+function getViewportSize() {
+  return {
+    width: window.innerWidth,
+    height: window.innerHeight,
+  };
+}
+
+function getBubbleMaxWidth(): number {
+  return Math.max(0, Math.min(320, getViewportSize().width - VIEWPORT_PADDING * 2));
+}
+
+function clampArrow(value: number, size: number): number {
+  const padding = Math.min(ARROW_PADDING, size / 2);
+  return clamp(value, padding, size - padding);
 }
 
 export function getWorkspacePath(group: GenericGroup): string {
@@ -77,32 +105,81 @@ export function useWorkspaceHint(placement: WorkspaceHintPlacement) {
 }
 
 const WorkspaceHintBubble: FC<{ hint: WorkspaceHintState | null }> = ({ hint }) => {
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  const [layout, setLayout] = useState<WorkspaceHintLayout | null>(null);
+
+  const updateLayout = useCallback(() => {
+    if (!hint || !bubbleRef.current) return;
+    const { width: viewportWidth, height: viewportHeight } = getViewportSize();
+    const bubbleRect = bubbleRef.current.getBoundingClientRect();
+    const bubbleWidth = bubbleRect.width;
+    const bubbleHeight = bubbleRect.height;
+    const centerX = hint.anchor.left + hint.anchor.width / 2;
+    const centerY = hint.anchor.top + hint.anchor.height / 2;
+    const maxLeft = viewportWidth - VIEWPORT_PADDING - bubbleWidth;
+    const maxTop = viewportHeight - VIEWPORT_PADDING - bubbleHeight;
+
+    if (hint.placement === "top") {
+      const left = clamp(centerX - bubbleWidth / 2, VIEWPORT_PADDING, maxLeft);
+      const top = clamp(hint.anchor.top - BUBBLE_GAP - bubbleHeight, VIEWPORT_PADDING, maxTop);
+      setLayout({
+        left,
+        top,
+        arrowX: clampArrow(centerX - left, bubbleWidth),
+        arrowY: bubbleHeight / 2,
+      });
+      return;
+    }
+
+    const left = clamp(hint.anchor.left + hint.anchor.width + BUBBLE_GAP, VIEWPORT_PADDING, maxLeft);
+    const top = clamp(centerY - bubbleHeight / 2, VIEWPORT_PADDING, maxTop);
+    setLayout({
+      left,
+      top,
+      arrowX: bubbleWidth / 2,
+      arrowY: clampArrow(centerY - top, bubbleHeight),
+    });
+  }, [hint]);
+
+  useLayoutEffect(() => {
+    setLayout(null);
+    updateLayout();
+  }, [updateLayout]);
+
+  useEffect(() => {
+    if (!hint) return;
+    window.addEventListener("resize", updateLayout);
+    window.visualViewport?.addEventListener("resize", updateLayout);
+    window.visualViewport?.addEventListener("scroll", updateLayout);
+    return () => {
+      window.removeEventListener("resize", updateLayout);
+      window.visualViewport?.removeEventListener("resize", updateLayout);
+      window.visualViewport?.removeEventListener("scroll", updateLayout);
+    };
+  }, [hint, updateLayout]);
+
   if (!hint) return null;
 
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
-  const maxWidth = Math.min(320, viewportWidth - 24);
-  const centerX = hint.anchor.left + hint.anchor.width / 2;
-  const centerY = hint.anchor.top + hint.anchor.height / 2;
   const isTop = hint.placement === "top";
-  const style = isTop
+  const bubbleStyle: CSSProperties = {
+    left: layout?.left ?? 0,
+    top: layout?.top ?? 0,
+    maxWidth: getBubbleMaxWidth(),
+    visibility: layout ? "visible" : "hidden",
+  };
+  const arrowStyle: CSSProperties = isTop
     ? {
-        left: clamp(centerX, 12 + maxWidth / 2, viewportWidth - 12 - maxWidth / 2),
-        top: hint.anchor.top - 8,
-        maxWidth,
-        transform: "translate(-50%, -100%)",
+        left: layout?.arrowX ?? "50%",
       }
     : {
-        left: Math.min(hint.anchor.left + hint.anchor.width + 8, viewportWidth - 12),
-        top: clamp(centerY, 12, viewportHeight - 12),
-        maxWidth,
-        transform: "translateY(-50%)",
+        top: layout?.arrowY ?? "50%",
       };
 
   return (
     <div
-      className="pointer-events-none fixed z-50 rounded-md border border-ide-border bg-ide-panel/95 px-2.5 py-2 text-left shadow-lg backdrop-blur-sm"
-      style={style}
+      ref={bubbleRef}
+      className="pointer-events-none fixed z-50 w-max rounded-md border border-ide-border bg-ide-panel/95 px-2.5 py-2 text-left shadow-lg backdrop-blur-sm"
+      style={bubbleStyle}
     >
       <span
         className={`absolute h-2 w-2 rotate-45 border-ide-border bg-ide-panel/95 ${
@@ -110,6 +187,7 @@ const WorkspaceHintBubble: FC<{ hint: WorkspaceHintState | null }> = ({ hint }) 
             ? "bottom-[-5px] left-1/2 -translate-x-1/2 border-b border-r"
             : "left-[-5px] top-1/2 -translate-y-1/2 border-b border-l"
         }`}
+        style={arrowStyle}
       />
       <div className="relative min-w-0 max-w-full">
         <div className="truncate text-xs font-medium text-ide-text">{hint.name}</div>
