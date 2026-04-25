@@ -42,7 +42,7 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
 
   const [asrStatus, setAsrStatus] = useState<SherpaStatus>("idle");
   const [asrProgress, setAsrProgress] = useState("");
-  const [voiceTarget, setVoiceTarget] = useState<VoiceReleaseTarget>("commit");
+  const [voiceTarget, setVoiceTarget] = useState<VoiceReleaseTarget>("none");
   const [voiceHold, setVoiceHold] = useState(false);
   const recordingRef = useRef(false);
   const startingRecordingRef = useRef(false);
@@ -95,6 +95,7 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
       setAsrStatus("idle");
       setAsrProgress("");
       setVoiceHold(false);
+      setVoiceTarget("none");
       pendingRecordingActionRef.current = null;
       if (text) emitText(text);
     },
@@ -137,7 +138,7 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
   const handleMicToggle = useCallback(
     async (action?: "start" | "stop" | "cancel" | "continue") => {
       if (action === "start") {
-        setVoiceTarget("commit");
+        setVoiceTarget("none");
         setVoiceHold(false);
         await startMicInput();
         return;
@@ -317,9 +318,9 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
               ? t("settings.speech.voice.recognizing")
               : voiceTarget === "cancel"
                 ? t("settings.speech.voice.releaseToCancel")
-                : voiceTarget === "commit"
-                  ? t("settings.speech.voice.releaseToSend")
-                  : t("settings.speech.voice.releaseToContinue")}
+                : voiceTarget === "continue"
+                  ? t("settings.speech.voice.releaseToContinue")
+                  : t("settings.speech.voice.releaseToSend")}
           </div>
           <div className="tk-voice-actions">
             <div

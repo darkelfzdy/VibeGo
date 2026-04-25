@@ -3,8 +3,9 @@ import { useSettingsStore } from "@/lib/settings";
 import type { SherpaStatus } from "./sherpa-asr";
 
 const DB_NAME = "VibeGoSpeechAssets";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_NAME = "assets";
+const CACHE_PREFIX = "vibego-speech-v3";
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -76,12 +77,38 @@ function assetLabel(label: string): string {
 }
 
 export function getBinaryAssetCacheKey(version: string, label: string): string {
-  return `vibego-speech-v2-${label}-${version || "dev"}`;
+  return `${CACHE_PREFIX}-${label}-${version || "dev"}`;
 }
 
-export async function hasBinaryAsset(version: string, label: string): Promise<boolean> {
-  const cached = await getFromDB(getBinaryAssetCacheKey(version, label));
+export function getBinaryAssetCacheKeyForURL(version: string, label: string, url: string): string {
+  return `${getBinaryAssetCacheKey(version, label)}-${url}`;
+}
+
+export async function hasBinaryAsset(version: string, label: string, url = ""): Promise<boolean> {
+  const cached = await getFromDB(getBinaryAssetCacheKeyForURL(version, label, url));
   return !!cached;
+}
+
+export async function deleteSpeechAssets(): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.clear();
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve();
+  });
+}
+
+export async function deleteBinaryAsset(version: string, label: string, url: string): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.delete(getBinaryAssetCacheKeyForURL(version, label, url));
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve();
+  });
 }
 
 export async function fetchBinaryAsset(
@@ -90,7 +117,7 @@ export async function fetchBinaryAsset(
   label: string,
   onStatus?: (status: SherpaStatus, progress?: string) => void
 ): Promise<ArrayBuffer> {
-  const cacheKey = getBinaryAssetCacheKey(version, label);
+  const cacheKey = getBinaryAssetCacheKeyForURL(version, label, url);
   const displayLabel = assetLabel(label);
 
   onStatus?.("loading", t("settings.speech.status.checkingCache", { label: displayLabel }));

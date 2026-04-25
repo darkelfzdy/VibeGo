@@ -324,20 +324,26 @@
       "label": "Key Sound",
       "description": "Play iOS-style key press sound when typing"
     },
+    "speechModel": {
+      "label": "Speech Model",
+      "description": "Choose the offline speech recognition model"
+    },
     "speechAssetSource": {
       "label": "Speech Download Source",
       "description": "Choose the speech model download source",
-      "optionAuto": "Auto",
-      "optionOfficial": "Official",
+      "optionOfficial": "Global",
       "optionChina": "China Mirror"
     },
     "speechAssets": {
       "label": "Speech Assets",
       "description": "Download offline speech recognition assets here before first use",
       "button": "Download Assets",
+      "deleteButton": "Delete Assets",
       "downloading": "Downloading speech recognition assets",
       "downloaded": "Speech recognition assets downloaded",
       "downloadFailed": "Failed to download speech recognition assets",
+      "deleted": "Speech recognition assets deleted",
+      "deleteFailed": "Failed to delete speech recognition assets",
       "missingTitle": "Speech assets not downloaded",
       "missingDescription": "Open Settings > Keyboard to download speech recognition assets.",
       "openSettings": "Open Settings"

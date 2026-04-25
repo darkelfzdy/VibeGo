@@ -11,36 +11,36 @@ func TestNewWithDefaults(t *testing.T) {
 	if info.Source != "auto" {
 		t.Fatalf("source = %q", info.Source)
 	}
-	if len(info.Sources) != 2 {
+	if len(info.Sources) != 6 {
 		t.Fatalf("sources = %#v", info.Sources)
 	}
-	if info.BaseURL != "/api/asr-assets/official/" {
+	if info.BaseURL != "/api/asr-assets/sense-voice-official/" {
 		t.Fatalf("base url = %q", info.BaseURL)
 	}
-	if info.WasmURL != "/api/asr-assets/official/"+defaultWasmFile {
+	if info.WasmURL != "/api/asr-assets/sense-voice-official/"+defaultWasmFile {
 		t.Fatalf("wasm url = %q", info.WasmURL)
 	}
-	if info.DataURL != "/api/asr-assets/official/"+defaultDataFile {
+	if info.DataURL != "/api/asr-assets/sense-voice-official/"+defaultDataFile {
 		t.Fatalf("data url = %q", info.DataURL)
 	}
-	if url, ok := svc.AssetURL("official", defaultWasmFile); !ok || url != defaultOfficialBaseURL+defaultWasmFile {
+	if url, ok := svc.AssetURL("sense-voice-official", defaultWasmFile); !ok || url != defaultOfficialBaseURL+defaultWasmFile {
 		t.Fatalf("asset url = %q, %v", url, ok)
 	}
 }
 
 func TestNewWithSelectedChinaSource(t *testing.T) {
-	svc := New(Config{Source: "china"})
+	svc := New(Config{Source: "sense-voice-china"})
 	info := svc.Info()
-	if info.Source != "china" {
+	if info.Source != "sense-voice-china" {
 		t.Fatalf("source = %q", info.Source)
 	}
-	if info.BaseURL != "/api/asr-assets/china/" {
+	if info.BaseURL != "/api/asr-assets/sense-voice-china/" {
 		t.Fatalf("base url = %q", info.BaseURL)
 	}
-	if info.WasmURL != "/api/asr-assets/china/"+defaultWasmFile {
+	if info.WasmURL != "/api/asr-assets/sense-voice-china/"+defaultWasmFile {
 		t.Fatalf("wasm url = %q", info.WasmURL)
 	}
-	if url, ok := svc.AssetURL("china", defaultMainScriptFile); !ok || url != defaultChinaBaseURL+defaultMainScriptFile {
+	if url, ok := svc.AssetURL("sense-voice-china", defaultMainScriptFile); !ok || url != defaultChinaBaseURL+defaultMainScriptFile {
 		t.Fatalf("asset url = %q, %v", url, ok)
 	}
 }
@@ -75,7 +75,7 @@ func TestNewWithExtraSources(t *testing.T) {
 		ExtraSourcesJSON: `[{"id":"edge","label":"Edge","region":"custom","baseUrl":"https://cdn.example.com/asr"}]`,
 	})
 	info := svc.Info()
-	if len(info.Sources) != 3 {
+	if len(info.Sources) != 7 {
 		t.Fatalf("sources = %#v", info.Sources)
 	}
 	if info.BaseURL != "/api/asr-assets/edge/" {

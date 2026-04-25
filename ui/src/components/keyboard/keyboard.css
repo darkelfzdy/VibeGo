@@ -311,6 +311,10 @@
   opacity: 0;
 }
 
+.tk-keyboard--recording .tk-key--space .tk-sub--s {
+  opacity: 1;
+}
+
 .tk-keyboard--recording {
   position: relative;
 }
@@ -351,7 +355,7 @@
 
 .tk-voice-actions {
   position: absolute;
-  inset: 40px 0 0;
+  inset: 40px 0 calc(var(--tk-row-height) + var(--tk-gap-y)) 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;

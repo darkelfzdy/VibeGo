@@ -37,7 +37,7 @@ const VOICE_TARGET_MOVE_THRESHOLD = 28;
 const REPEAT_INTERVAL = 120;
 const VOICE_VERTICAL_THRESHOLD = 22;
 type KeyOutputAction = "start" | "stop" | "cancel" | "continue";
-export type VoiceReleaseTarget = "cancel" | "continue" | "commit";
+export type VoiceReleaseTarget = "cancel" | "continue" | "commit" | "none";
 
 const DISPLAY_LABELS: Record<string, React.ReactNode> = {
   ArrowUp: <ArrowUp size={12} strokeWidth={2.5} />,
@@ -181,8 +181,8 @@ const KeyButton: React.FC<KeyButtonProps> = ({
           navigator.vibrate?.(50);
           if (resolved.value === "Mic") {
             stateRef.current.isVoiceGesture = true;
-            stateRef.current.voiceTarget = "commit";
-            onVoiceTargetChange?.("commit");
+            stateRef.current.voiceTarget = "none";
+            onVoiceTargetChange?.("none");
             onKeyOutput("Mic", true, "start");
           }
           return;
@@ -235,8 +235,8 @@ const KeyButton: React.FC<KeyButtonProps> = ({
                 navigator.vibrate?.(50);
                 if (subVal === "Mic") {
                   stateRef.current.isVoiceGesture = true;
-                  stateRef.current.voiceTarget = "commit";
-                  onVoiceTargetChange?.("commit");
+                  stateRef.current.voiceTarget = "none";
+                  onVoiceTargetChange?.("none");
                   onKeyOutput("Mic", true, "start");
                 }
                 return;

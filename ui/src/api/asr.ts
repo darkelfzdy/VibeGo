@@ -14,6 +14,7 @@ export interface AsrInfo {
 export interface AsrSource {
   id: string;
   label: string;
+  model?: string;
   region?: string;
   baseUrl: string;
   wasmUrl: string;

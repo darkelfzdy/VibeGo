@@ -1,7 +1,7 @@
 import { type AsrInfo, type AsrSource, asrApi } from "@/api/asr";
 import { getTranslation, type Locale } from "@/lib/i18n";
 import { useSettingsStore } from "@/lib/settings";
-import { fetchBinaryAsset, hasBinaryAsset } from "./sherpa-asset";
+import { deleteBinaryAsset, fetchBinaryAsset, hasBinaryAsset } from "./sherpa-asset";
 
 export type SherpaStatus = "idle" | "loading" | "recording" | "recognizing" | "error";
 export type SherpaResultCallback = (text: string) => void;
@@ -24,6 +24,7 @@ let sherpaDataUrl = "";
 let sherpaSources: AsrSource[] = [];
 let selectedSpeechSource: AsrSource | null = null;
 let selectedSpeechSourcePreference = "";
+let loadedSpeechSourcePreference = "";
 let moduleLoaded = false;
 let moduleLoadingPromise: Promise<void> | null = null;
 let binaryAssetsPromise: Promise<{ wasmBinary: ArrayBuffer; dataPackage: ArrayBuffer }> | null = null;
@@ -57,8 +58,8 @@ function t(key: string, vars?: Record<string, string>): string {
 }
 
 function sourceLabel(source: AsrSource): string {
-  if (source.id === "official") return t("settings.speech.sources.official");
-  if (source.id === "china") return t("settings.speech.sources.china");
+  if (source.region === "china") return `${source.label} ${t("settings.speech.sources.china")}`;
+  if (source.region === "global") return `${source.label} ${t("settings.speech.sources.official")}`;
   return source.label;
 }
 
@@ -87,6 +88,7 @@ function normalizeSource(source: AsrSource): AsrSource | null {
   return {
     id,
     label: (source.label || id).trim(),
+    model: (source.model || "").trim().toLowerCase(),
     region: source.region,
     baseUrl: baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`,
     wasmUrl,
@@ -108,7 +110,16 @@ function sourcesFromInfo(info: AsrInfo): AsrSource[] {
 }
 
 function preferredSpeechSource(): string {
-  return (useSettingsStore.getState().settings.speechAssetSource || "auto").trim().toLowerCase() || "auto";
+  const settings = useSettingsStore.getState().settings;
+  const model = (settings.speechModel || "sense-voice").trim().toLowerCase() || "sense-voice";
+  const rawSource = (settings.speechAssetSource || "official").trim().toLowerCase() || "official";
+  const source = rawSource === "china" ? "china" : "official";
+  return `${model}-${source}`;
+}
+
+function speechSourceID(model: string, source: string): string {
+  const nextSource = source === "china" ? "china" : "official";
+  return `${model || "sense-voice"}-${nextSource}`;
 }
 
 async function ensureAssetInfo(): Promise<void> {
@@ -183,11 +194,26 @@ function applySpeechSource(source: AsrSource, preference: string) {
   sherpaDataUrl = source.dataUrl;
 }
 
+function resetLoadedModule() {
+  stopCapture();
+  try {
+    recognizer?.free?.();
+  } catch {}
+  try {
+    vad?.free?.();
+  } catch {}
+  vad = null;
+  recognizer = null;
+  moduleLoaded = false;
+  moduleLoadingPromise = null;
+  binaryAssetsPromise = null;
+  loadedSpeechSourcePreference = "";
+  recordedChunks = [];
+}
+
 function localSpeechSource(preference: string): AsrSource | null {
-  if (preference !== "auto") {
-    const preferred = sherpaSources.find((source) => source.id === preference);
-    if (preferred) return preferred;
-  }
+  const preferred = sherpaSources.find((source) => source.id === preference);
+  if (preferred) return preferred;
   return selectedSpeechSource || sherpaSources[0] || null;
 }
 
@@ -210,19 +236,18 @@ async function ensureSelectedSource(
     throw new Error(t("settings.speech.errors.noSource"));
   }
 
-  if (preference !== "auto") {
-    const preferred = candidates.find((source) => source.id === preference);
-    if (preferred) {
-      onStatus?.("loading", t("settings.speech.status.checkingSource", { source: sourceLabel(preferred) }));
-      if ((await probeSource(preferred)) !== null) {
-        applySpeechSource(preferred, preference);
-        return preferred;
-      }
-      failedSources.add(preferred.id);
+  const preferred = candidates.find((source) => source.id === preference);
+  if (preferred) {
+    onStatus?.("loading", t("settings.speech.status.checkingSource", { source: sourceLabel(preferred) }));
+    if ((await probeSource(preferred)) !== null) {
+      applySpeechSource(preferred, preference);
+      return preferred;
     }
+    failedSources.add(preferred.id);
   }
 
-  const remaining = sherpaSources.filter((source) => !failedSources.has(source.id));
+  const preferredModel = preference.replace(/-(official|china)$/, "");
+  const remaining = sherpaSources.filter((source) => source.model === preferredModel && !failedSources.has(source.id));
   if (remaining.length === 0) {
     throw new Error(t("settings.speech.errors.noSource"));
   }
@@ -236,9 +261,15 @@ async function ensureSelectedSource(
 
 export async function hasRequiredSpeechAssets(): Promise<boolean> {
   await ensureAssetInfo();
+  const cachedSource = localSpeechSource(preferredSpeechSource());
+  if (!cachedSource) return false;
+  return hasSpeechAssetsForSource(cachedSource);
+}
+
+async function hasSpeechAssetsForSource(source: AsrSource): Promise<boolean> {
   const [hasWasm, hasData] = await Promise.all([
-    hasBinaryAsset(sherpaVersion, "speech-engine"),
-    hasBinaryAsset(sherpaVersion, "speech-model"),
+    hasBinaryAsset(sherpaVersion, "speech-engine", source.wasmUrl),
+    hasBinaryAsset(sherpaVersion, "speech-model", source.dataUrl),
   ]);
   return hasWasm && hasData;
 }
@@ -246,6 +277,47 @@ export async function hasRequiredSpeechAssets(): Promise<boolean> {
 export async function preloadSpeechAssets(onStatus?: (status: SherpaStatus, progress?: string) => void): Promise<void> {
   await ensureAssetInfo();
   await ensureBinaryAssets(onStatus);
+}
+
+export async function speechAssetStates(source: string): Promise<Record<string, boolean>> {
+  await ensureAssetInfo();
+  const next: Record<string, boolean> = {};
+  for (const candidate of sherpaSources) {
+    if (!candidate.model || (candidate.region === "china") !== (source === "china")) continue;
+    next[candidate.model] = await hasSpeechAssetsForSource(candidate);
+  }
+  return next;
+}
+
+export async function preloadSpeechModel(
+  model: string,
+  source: string,
+  onStatus?: (status: SherpaStatus, progress?: string) => void
+): Promise<void> {
+  await ensureAssetInfo();
+  const previous = useSettingsStore.getState().settings;
+  const selected = sherpaSources.find((candidate) => candidate.id === speechSourceID(model, source));
+  if (!selected) throw new Error(t("settings.speech.errors.noSource"));
+  if (loadedSpeechSourcePreference && loadedSpeechSourcePreference !== selected.id) {
+    resetLoadedModule();
+  }
+  applySpeechSource(selected, selected.id);
+  await fetchBinaryAsset(selected.wasmUrl, sherpaVersion, "speech-engine", onStatus);
+  await fetchBinaryAsset(selected.dataUrl, sherpaVersion, "speech-model", onStatus);
+  await useSettingsStore.getState().set("speechModel", model);
+  if ((previous.speechAssetSource || "official") !== source) {
+    await useSettingsStore.getState().set("speechAssetSource", source);
+  }
+}
+
+export async function deleteSpeechModelAssets(model: string, source: string): Promise<void> {
+  await ensureAssetInfo();
+  const selected = sherpaSources.find((candidate) => candidate.id === speechSourceID(model, source));
+  if (!selected) return;
+  await Promise.all([
+    deleteBinaryAsset(sherpaVersion, "speech-engine", selected.wasmUrl),
+    deleteBinaryAsset(sherpaVersion, "speech-model", selected.dataUrl),
+  ]);
 }
 
 function assignGlobals(code: string) {
@@ -266,8 +338,8 @@ async function ensureBinaryAssets(
     const preference = preferredSpeechSource();
     const cachedSource = localSpeechSource(preference);
     const [hasWasm, hasData] = await Promise.all([
-      hasBinaryAsset(sherpaVersion, "speech-engine"),
-      hasBinaryAsset(sherpaVersion, "speech-model"),
+      hasBinaryAsset(sherpaVersion, "speech-engine", cachedSource?.wasmUrl || ""),
+      hasBinaryAsset(sherpaVersion, "speech-model", cachedSource?.dataUrl || ""),
     ]);
     if (hasWasm && hasData && cachedSource && !failedSources.has(cachedSource.id)) {
       applySpeechSource(cachedSource, preference);
@@ -316,12 +388,18 @@ function initOfflineRecognizer() {
   const config: any = { modelConfig: { debug: 0, tokens: "./tokens.txt" } };
   if (fileExists("sense-voice.onnx")) {
     config.modelConfig.senseVoice = { model: "./sense-voice.onnx", useInverseTextNormalization: 1 };
+  } else if (fileExists("paraformer.onnx")) {
+    config.modelConfig.paraformer = { model: "./paraformer.onnx" };
   }
   recognizer = new window.OfflineRecognizer(config, window.Module);
 }
 
 export async function ensureLoaded(onStatus?: (status: SherpaStatus, progress?: string) => void): Promise<void> {
-  if (moduleLoaded) return;
+  const preference = preferredSpeechSource();
+  if (moduleLoaded && loadedSpeechSourcePreference === preference) return;
+  if (moduleLoaded && loadedSpeechSourcePreference !== preference) {
+    resetLoadedModule();
+  }
   if (moduleLoadingPromise) return moduleLoadingPromise;
   onStatus?.("loading", t("settings.speech.status.loadingModel"));
 
@@ -351,6 +429,7 @@ export async function ensureLoaded(onStatus?: (status: SherpaStatus, progress?: 
               vad = window.createVad(window.Module);
               initOfflineRecognizer();
               moduleLoaded = true;
+              loadedSpeechSourcePreference = selectedSpeechSourcePreference;
             },
           };
 
