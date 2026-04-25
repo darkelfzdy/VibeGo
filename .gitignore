@@ -8,5 +8,5 @@ ui/CLAUDE.md
 /artifacts
 /testdata
 /scripts/__pycache__
-ui/public/sherpa/
+/assets/sherpa/
 /thirdparty/blockterm-demo
