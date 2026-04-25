@@ -112,9 +112,9 @@ jobs:
 
             set +e
             if [ -n "$access" ]; then
-              out=$(npm publish "$file" --provenance --access "$access" 2>&1)
+              out=$(npm publish "$file" --provenance --access "$access" --loglevel verbose 2>&1)
             else
-              out=$(npm publish "$file" --provenance 2>&1)
+              out=$(npm publish "$file" --provenance --loglevel verbose 2>&1)
             fi
             status=$?
             set -e
