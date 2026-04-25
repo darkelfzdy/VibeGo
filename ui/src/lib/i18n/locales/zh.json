@@ -351,6 +351,48 @@
       "missingDescription": "请点击打开设置页的键盘设置页面，在那里下载语音识别资源。",
       "openSettings": "打开设置"
     },
+    "speech": {
+      "voice": {
+        "recognizing": "语音转文字中...",
+        "releaseToCancel": "松手取消",
+        "releaseToSend": "松手发送",
+        "releaseToContinue": "松手继续识别",
+        "stop": "停止语音输入"
+      },
+      "assets": {
+        "engine": "语音识别引擎",
+        "model": "语音识别模型"
+      },
+      "sources": {
+        "official": "官方源",
+        "china": "中国镜像"
+      },
+      "status": {
+        "checkingSource": "正在检查 {source}...",
+        "selectingSource": "正在选择语音下载源...",
+        "sourceFailed": "{source} 不可用，正在尝试其他下载源...",
+        "loadingModel": "正在加载语音模型...",
+        "initializing": "正在初始化...",
+        "checkingCache": "正在检查 {label} 缓存...",
+        "loadedFromCache": "已从本地缓存加载 {label}",
+        "downloadingAsset": "正在下载 {label}...",
+        "downloadProgress": "{label} {percent}% ({loaded}/{total}MB)",
+        "downloadLoaded": "{label} 正在下载... ({loaded}MB)"
+      },
+      "errors": {
+        "loadScriptFailed": "加载 {src} 失败",
+        "assetsUnavailable": "语音模型资源不可用",
+        "noSource": "没有可用的语音下载源",
+        "downloadFailed": "语音识别资源下载失败",
+        "timeout": "加载超时",
+        "loadModelFailed": "语音模型加载失败",
+        "microphoneDenied": "麦克风权限被拒绝",
+        "htmlInsteadBinary": "服务器返回了 HTML，而不是 {label} 二进制文件，请检查代理配置。",
+        "emptyAsset": "下载的 {label} 为空",
+        "assetHttpFailed": "下载 {label} 失败：HTTP {status}",
+        "assetNetworkFailed": "下载 {label} 时发生网络错误"
+      }
+    },
     "option": {
       "light": "浅色",
       "dark": "深色",

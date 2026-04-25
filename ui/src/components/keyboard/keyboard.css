@@ -331,8 +331,9 @@
   display: grid;
   grid-template-rows: 40px 1fr;
   align-items: center;
-  pointer-events: none;
+  pointer-events: auto;
   color: var(--tk-text);
+  touch-action: none;
 }
 
 .tk-voice-status {
@@ -360,6 +361,16 @@
   color: var(--ide-on-accent);
   background: var(--ide-accent);
   box-shadow: var(--tk-key-shadow);
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  pointer-events: auto;
+}
+
+.tk-voice-mic:disabled {
+  opacity: 0.72;
+  cursor: default;
 }
 
 .tk-voice-actions {

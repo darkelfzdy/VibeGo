@@ -29,6 +29,8 @@ interface KeyboardProps {
 const INITIAL_MOD = { active: false, locked: false };
 
 const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_QWERTY }) => {
+  const locale = useSettingsStore((s) => (s.settings.locale === "en" ? "en" : "zh"));
+  const t = useMemo(() => (key: string) => getTranslation(locale, key), [locale]);
   const [modifiers, setModifiers] = useState<ModifiersState>({
     ctrl: { ...INITIAL_MOD },
     alt: { ...INITIAL_MOD },
@@ -294,19 +296,39 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
         </div>
       )}
       {showVoicePanel && (
-        <div className="tk-voice-overlay">
+        <div
+          className="tk-voice-overlay"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onPointerUp={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
           <div className="tk-voice-status">
             {asrStatus === "recognizing"
-              ? "语音转文字中..."
+              ? t("settings.speech.voice.recognizing")
               : voiceTarget === "cancel"
-                ? "松手取消"
+                ? t("settings.speech.voice.releaseToCancel")
                 : voiceTarget === "commit"
-                  ? "松手发送"
-                  : "松手继续识别"}
+                  ? t("settings.speech.voice.releaseToSend")
+                  : t("settings.speech.voice.releaseToContinue")}
           </div>
-          <div className="tk-voice-mic">
+          <button
+            type="button"
+            className="tk-voice-mic"
+            aria-label={t("settings.speech.voice.stop")}
+            disabled={asrStatus === "recognizing"}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (asrStatus !== "recognizing") handleMicToggle("stop");
+            }}
+          >
             <Mic size={20} strokeWidth={2.4} />
-          </div>
+          </button>
           <div className="tk-voice-actions">
             <div className="tk-voice-action tk-voice-action--cancel">
               <Undo2 size={24} strokeWidth={2.3} />
