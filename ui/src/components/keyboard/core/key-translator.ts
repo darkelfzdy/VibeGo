@@ -70,7 +70,7 @@ export type TranslatedAction =
   | { type: "ui"; action: string }
   | { type: "none" };
 
-const UI_KEYS = new Set(["Keyboard", "Emoji", "Settings", "Mic", "Fn"]);
+const UI_KEYS = new Set(["Keyboard", "DismissKeyboard", "Emoji", "Settings", "Mic", "Fn"]);
 
 export function translateKeyEvent(event: KeyEvent): TranslatedAction {
   const { value, ctrl, alt, shift, meta } = event;

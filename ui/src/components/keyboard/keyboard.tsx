@@ -3,7 +3,12 @@ import { toast } from "sonner";
 import { keyFeedback } from "@/components/keyboard/core/key-feedback";
 import { KEYBOARD_QWERTY } from "@/components/keyboard/core/layouts";
 import type { SherpaStatus } from "@/components/keyboard/core/sherpa-asr";
-import { hasRequiredSpeechAssets, startRecording, stopAndRecognize } from "@/components/keyboard/core/sherpa-asr";
+import {
+  cancelRecording,
+  hasRequiredSpeechAssets,
+  startRecording,
+  stopAndRecognize,
+} from "@/components/keyboard/core/sherpa-asr";
 import type { KeyEvent, LayoutDef, ModifiersState } from "@/components/keyboard/core/types";
 import { MODIFIER_KEYS } from "@/components/keyboard/core/types";
 import KeyButton from "@/components/keyboard/key-button";
@@ -34,6 +39,8 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
   const [asrStatus, setAsrStatus] = useState<SherpaStatus>("idle");
   const [asrProgress, setAsrProgress] = useState("");
   const recordingRef = useRef(false);
+  const startingRecordingRef = useRef(false);
+  const pendingRecordingActionRef = useRef<"commit" | "cancel" | null>(null);
   const openingSpeechSettingsRef = useRef(false);
   const openSettingsCategory = useFrameStore((s) => s.openSettingsCategory);
 
@@ -73,57 +80,74 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
     }, 800);
   }, [openSettingsCategory]);
 
-  const handleMicToggle = useCallback(
-    async (action?: "start" | "stop") => {
-      if (action === "start") {
-        if (!recordingRef.current) {
-          const ready = await hasRequiredSpeechAssets().catch(() => false);
-          if (!ready) {
-            openKeyboardSpeechSettings();
-            return;
-          }
-          recordingRef.current = true;
-          setAsrProgress("");
-          startRecording((status, progress) => {
-            setAsrStatus(status);
-            if (typeof progress === "string") setAsrProgress(progress);
-            else if (status !== "loading") setAsrProgress("");
-            if (status === "error") recordingRef.current = false;
-          });
-        }
-      } else if (action === "stop") {
-        if (recordingRef.current) {
-          recordingRef.current = false;
-          const text = stopAndRecognize();
-          setAsrStatus("idle");
-          setAsrProgress("");
-          if (text) emitText(text);
-        }
-      } else {
-        if (recordingRef.current) {
-          recordingRef.current = false;
-          const text = stopAndRecognize();
-          setAsrStatus("idle");
-          setAsrProgress("");
-          if (text) emitText(text);
-        } else {
-          const ready = await hasRequiredSpeechAssets().catch(() => false);
-          if (!ready) {
-            openKeyboardSpeechSettings();
-            return;
-          }
-          recordingRef.current = true;
-          setAsrProgress("");
-          startRecording((status, progress) => {
-            setAsrStatus(status);
-            if (typeof progress === "string") setAsrProgress(progress);
-            else if (status !== "loading") setAsrProgress("");
-            if (status === "error") recordingRef.current = false;
-          });
-        }
-      }
+  const finishMicInput = useCallback(
+    (mode: "commit" | "cancel") => {
+      if (!recordingRef.current) return;
+      recordingRef.current = false;
+      const text = mode === "commit" ? stopAndRecognize() : "";
+      if (mode === "cancel") cancelRecording();
+      setAsrStatus("idle");
+      setAsrProgress("");
+      pendingRecordingActionRef.current = null;
+      if (text) emitText(text);
     },
-    [emitText, openKeyboardSpeechSettings]
+    [emitText]
+  );
+
+  const startMicInput = useCallback(async () => {
+    if (recordingRef.current || startingRecordingRef.current) return;
+    startingRecordingRef.current = true;
+    pendingRecordingActionRef.current = null;
+    const ready = await hasRequiredSpeechAssets().catch(() => false);
+    if (!ready) {
+      startingRecordingRef.current = false;
+      pendingRecordingActionRef.current = null;
+      openKeyboardSpeechSettings();
+      return;
+    }
+    if (pendingRecordingActionRef.current) {
+      startingRecordingRef.current = false;
+      pendingRecordingActionRef.current = null;
+      return;
+    }
+    recordingRef.current = true;
+    setAsrProgress("");
+    await startRecording((status, progress) => {
+      setAsrStatus(status);
+      if (typeof progress === "string") setAsrProgress(progress);
+      else if (status !== "loading") setAsrProgress("");
+      if (status === "error") {
+        recordingRef.current = false;
+        startingRecordingRef.current = false;
+        pendingRecordingActionRef.current = null;
+      }
+    });
+    startingRecordingRef.current = false;
+    const pendingAction = pendingRecordingActionRef.current;
+    if (pendingAction) finishMicInput(pendingAction);
+  }, [finishMicInput, openKeyboardSpeechSettings]);
+
+  const handleMicToggle = useCallback(
+    async (action?: "start" | "stop" | "cancel") => {
+      if (action === "start") {
+        await startMicInput();
+        return;
+      }
+
+      const mode = action === "cancel" ? "cancel" : "commit";
+      if (startingRecordingRef.current) {
+        pendingRecordingActionRef.current = mode;
+        return;
+      }
+
+      if (recordingRef.current) {
+        finishMicInput(mode);
+        return;
+      }
+
+      if (!action) await startMicInput();
+    },
+    [finishMicInput, startMicInput]
   );
 
   const modName = useCallback((value: string): keyof ModifiersState | null => {
@@ -153,7 +177,7 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
   }, []);
 
   const handleKeyOutput = useCallback(
-    (value: string, special: boolean, action?: "start" | "stop") => {
+    (value: string, special: boolean, action?: "start" | "stop" | "cancel") => {
       keyFeedback(value, special ? "modifier" : "char");
       if (MODIFIER_KEYS.has(value)) {
         const name = modName(value);
@@ -420,6 +444,13 @@ export const Keyboard: React.FC = () => {
           active.dataset.ignoreBlur = "false";
           active.focus();
         }
+        return;
+      }
+
+      if (e.value === "DismissKeyboard") {
+        setUseNativeKeyboard(false);
+        const active = document.activeElement as HTMLElement | null;
+        if (active && isEditable(active)) active.blur();
         return;
       }
 

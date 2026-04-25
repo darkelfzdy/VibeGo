@@ -89,6 +89,7 @@ export const SPECIAL_KEYS = new Set([
   "Meta",
   "Mic",
   "Keyboard",
+  "DismissKeyboard",
   "Emoji",
   "Clipboard",
   "Select",

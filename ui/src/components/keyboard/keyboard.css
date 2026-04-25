@@ -69,7 +69,6 @@
   min-width: 0;
 }
 
-/* Invisible hit area expansion */
 .tk-key::after {
   content: "";
   position: absolute;
@@ -150,6 +149,27 @@
 .tk-sub--sw { grid-area: 3 / 1; align-self: end; justify-self: start; padding: 0 0 1px 2px; }
 .tk-sub--s  { grid-area: 3 / 2; align-self: end; }
 .tk-sub--se { grid-area: 3 / 3; align-self: end; justify-self: end; padding: 0 2px 1px 0; }
+
+.tk-sub-button {
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tk-text-sub);
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tk-sub-button:active {
+  color: var(--tk-text);
+}
 
 .tk-swipe-preview {
   position: absolute;
@@ -240,6 +260,53 @@
   width: 18px;
   height: 18px;
 }
+
+.tk-voice-picker {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+  display: grid;
+  grid-template-columns: 44px 48px 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 8px;
+  background: var(--tk-key-bg);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  pointer-events: none;
+}
+
+.tk-voice-choice,
+.tk-voice-live {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  border-radius: 6px;
+  color: var(--tk-text);
+}
+
+.tk-voice-choice {
+  background: color-mix(in srgb, var(--ide-border) 65%, transparent);
+}
+
+.tk-voice-live {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.tk-voice-picker[data-target="cancel"] .tk-voice-choice--cancel {
+  color: #ffffff;
+  background: #ef4444;
+}
+
+.tk-voice-picker[data-target="commit"] .tk-voice-choice--commit {
+  color: var(--tk-mod-latched-text);
+  background: var(--tk-mod-latched-bg);
+}
+
 .tk-row--short {
   height: calc(var(--tk-row-height) * 0.85);
 }
@@ -282,7 +349,6 @@
   50% { opacity: 0.4; transform: scale(0.8); }
 }
 
-/* Voice recording state overrides */
 .tk-keyboard--recording .tk-key .tk-label,
 .tk-keyboard--recording .tk-key .tk-sub {
   opacity: 0;

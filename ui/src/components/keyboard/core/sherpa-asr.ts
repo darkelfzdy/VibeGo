@@ -480,7 +480,7 @@ export async function startRecording(onStatus: (status: SherpaStatus, progress?:
   }
 }
 
-export function stopAndRecognize(): string {
+function stopCapture() {
   if (recorder && audioCtx) {
     try {
       recorder.disconnect(audioCtx.destination);
@@ -494,6 +494,17 @@ export function stopAndRecognize(): string {
     micStream.getTracks().forEach((t) => t.stop());
     micStream = null;
   }
+}
+
+export function cancelRecording(): void {
+  stopCapture();
+  recordedChunks = [];
+  statusCb?.("idle");
+  statusCb = null;
+}
+
+export function stopAndRecognize(): string {
+  stopCapture();
 
   if (recordedChunks.length === 0) {
     statusCb?.("idle");

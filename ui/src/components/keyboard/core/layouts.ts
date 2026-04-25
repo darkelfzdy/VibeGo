@@ -27,7 +27,7 @@ export const KEYBOARD_QWERTY: LayoutDef = {
         { id: "h", label: "h", value: "h", type: "char", sub: { ne: "=", sw: "+" } },
         { id: "j", label: "j", value: "j", type: "char", sub: { ne: ":", sw: ";", se: "PageUp" } },
         { id: "k", label: "k", value: "k", type: "char", sub: { nw: "F11", ne: '"', sw: "'", se: "Home" } },
-        { id: "l", label: "l", value: "l", type: "char", sub: { nw: "F12", se: "Insert" } },
+        { id: "l", label: "l", value: "l", type: "char", sub: { nw: "F12", ne: "DismissKeyboard", se: "Insert" } },
       ],
     },
     {
