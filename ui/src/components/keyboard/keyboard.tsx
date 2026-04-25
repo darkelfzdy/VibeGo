@@ -606,7 +606,21 @@ export const Keyboard: React.FC = () => {
 
       let targetCursor = -1;
 
-      if (action.type === "input") {
+      if (e.value === "Backspace") {
+        if (activeInput) {
+          const start = activeInput.selectionStart ?? 0;
+          const end = activeInput.selectionEnd ?? 0;
+          targetCursor = start !== end ? start : Math.max(0, start - 1);
+        }
+        document.execCommand("delete");
+      } else if (e.value === "Delete") {
+        if (activeInput) {
+          const start = activeInput.selectionStart ?? 0;
+          const end = activeInput.selectionEnd ?? 0;
+          targetCursor = start !== end ? start : start;
+        }
+        document.execCommand("forwardDelete");
+      } else if (action.type === "input") {
         if (activeInput) targetCursor = (activeInput.selectionStart ?? 0) + action.data.length;
         document.execCommand("insertText", false, action.data);
       } else if (action.type === "copy") {
@@ -635,20 +649,6 @@ export const Keyboard: React.FC = () => {
         } else {
           document.execCommand("selectAll");
         }
-      } else if (e.value === "Backspace") {
-        if (activeInput) {
-          const start = activeInput.selectionStart ?? 0;
-          const end = activeInput.selectionEnd ?? 0;
-          targetCursor = start !== end ? start : Math.max(0, start - 1);
-        }
-        document.execCommand("delete");
-      } else if (e.value === "Delete") {
-        if (activeInput) {
-          const start = activeInput.selectionStart ?? 0;
-          const end = activeInput.selectionEnd ?? 0;
-          targetCursor = start !== end ? start : start;
-        }
-        document.execCommand("forwardDelete");
       }
 
       if (activeInput && targetCursor !== -1) {
