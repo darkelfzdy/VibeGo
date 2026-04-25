@@ -119,7 +119,7 @@ func runServer(ctx context.Context) error {
 
 	r.Use(middleware.Recovery())
 	r.Use(middleware.Logger())
-	r.Use(middleware.RateLimit(1000, time.Minute))
+	r.Use(middleware.RateLimit(5000, time.Minute))
 	r.Use(middleware.AllowWAN(cfg.AllowWAN))
 	r.Use(middleware.CORS(cfg.CORSOrigins))
 
