@@ -278,6 +278,12 @@
       "label": "Word Wrap",
       "description": "Enable word wrapping in editor"
     },
+    "terminalFontFamily": {
+      "label": "Terminal Font",
+      "description": "Choose the monospace font used by terminal sessions",
+      "optionDefault": "Default terminal font",
+      "optionSystemMono": "Follow UI monospace font"
+    },
     "terminalDesktopNotifications": {
       "label": "Desktop Notifications",
       "description": "Prefer browser notifications when the page is in the background and the terminal is not active"

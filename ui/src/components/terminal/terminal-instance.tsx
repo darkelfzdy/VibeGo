@@ -12,9 +12,11 @@ import { type ITheme, Terminal } from "@xterm/xterm";
 import { Check, ChevronDown, ChevronUp, Copy, X } from "lucide-react";
 import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
-import { terminalApi, type TerminalCapabilities } from "@/api/terminal";
+import { type TerminalCapabilities, terminalApi } from "@/api/terminal";
+import { getTerminalFontFamily } from "@/components/terminal/fonts";
 import TerminalSelectionMenu from "@/components/terminal/terminal-selection-menu";
 import { useTranslation } from "@/lib/i18n";
+import { useSettingsStore } from "@/lib/settings";
 import {
   armTerminalBrowserUnloadGuard,
   setTerminalBrowserShortcutFocus,
@@ -510,6 +512,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
 
     const theme = useAppStore((s) => s.theme);
     const locale = useAppStore((s) => s.locale);
+    const terminalFontFamily = useSettingsStore((s) => s.settings.terminalFontFamily);
     const t = useTranslation(locale);
 
     useEffect(() => {
@@ -1170,6 +1173,14 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
     }, [theme]);
 
     useEffect(() => {
+      const terminal = terminalRef.current;
+      const fitAddon = fitAddonRef.current;
+      if (!terminal) return;
+      terminal.options.fontFamily = getTerminalFontFamily(terminalFontFamily);
+      requestAnimationFrame(() => fitAddon?.fit());
+    }, [terminalFontFamily]);
+
+    useEffect(() => {
       if (!searchAddonRef.current || !searchTerm) return;
       searchAddonRef.current.findNext(searchTerm, { caseSensitive: searchCaseSensitive, regex: searchRegex });
     }, [searchTerm, searchCaseSensitive, searchRegex]);
@@ -1193,7 +1204,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
       const terminal = new Terminal({
         cursorBlink: true,
         fontSize: 14,
-        fontFamily: "Menlo, Monaco, 'Courier New', monospace",
+        fontFamily: getTerminalFontFamily(terminalFontFamily),
         theme: getXtermTheme(theme),
         scrollback: 5000,
         allowProposedApi: true,

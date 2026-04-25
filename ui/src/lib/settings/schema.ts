@@ -113,6 +113,19 @@ export const SETTINGS_SCHEMA: SettingSchema[] = [
     defaultValue: "false",
   },
   {
+    key: "terminalFontFamily",
+    type: "select",
+    category: "terminal",
+    labelKey: "settings.terminalFontFamily.label",
+    descriptionKey: "settings.terminalFontFamily.description",
+    defaultValue: "default",
+    options: [
+      { value: "default", label: "settings.terminalFontFamily.optionDefault" },
+      { value: "jetbrains-mono", label: "JetBrains Mono" },
+      { value: "system-mono", label: "settings.terminalFontFamily.optionSystemMono" },
+    ],
+  },
+  {
     key: "terminalDesktopNotifications",
     type: "toggle",
     category: "terminal",

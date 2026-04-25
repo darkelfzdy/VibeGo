@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Settings,
   Smartphone,
+  Type,
   User,
   Vibrate,
   Volume2,
@@ -44,6 +45,8 @@ const SettingItem: React.FC<{
         return value === "list" ? <List size={18} /> : <Grid size={18} />;
       case "editorWordWrap":
         return value === "true" ? <WrapText size={18} /> : <AlignLeft size={18} />;
+      case "terminalFontFamily":
+        return <Type size={18} />;
       case "terminalDesktopNotifications":
         return <Bell size={18} />;
       case "gitUserName":
@@ -381,9 +384,7 @@ const SettingsPage: React.FC = () => {
                   sourceValue={settings.speechAssetSource || "auto"}
                   sourceOptions={schema.key === "speechAssets" ? speechSourceOptions : undefined}
                   onSourceChange={
-                    schema.key === "speechAssets"
-                      ? (v) => void handleSettingChange("speechAssetSource", v)
-                      : undefined
+                    schema.key === "speechAssets" ? (v) => void handleSettingChange("speechAssetSource", v) : undefined
                   }
                 />
               ))}
