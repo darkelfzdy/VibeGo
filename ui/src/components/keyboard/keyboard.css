@@ -337,49 +337,25 @@
 }
 
 .tk-voice-status {
+  position: relative;
+  z-index: 1;
   grid-row: 1;
   justify-self: center;
   align-self: start;
-  padding-top: 2px;
+  padding-top: 10px;
   color: var(--ide-mute);
   font-size: 15px;
   font-weight: 600;
   line-height: 1.2;
 }
 
-.tk-voice-mic {
-  position: absolute;
-  top: 7px;
-  right: 14px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--ide-border);
-  border-radius: var(--tk-key-radius);
-  color: var(--ide-on-accent);
-  background: var(--ide-accent);
-  box-shadow: var(--tk-key-shadow);
-  padding: 0;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: none;
-  pointer-events: auto;
-}
-
-.tk-voice-mic:disabled {
-  opacity: 0.72;
-  cursor: default;
-}
-
 .tk-voice-actions {
-  grid-row: 2;
+  position: absolute;
+  inset: 40px 0 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: center;
-  gap: var(--tk-gap-x);
-  padding: 4px var(--tk-side-pad) 12px;
+  align-items: stretch;
+  gap: 0;
 }
 
 .tk-voice-action {
@@ -388,14 +364,39 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  max-width: 138px;
-  height: 58px;
-  border: 1px solid var(--ide-border);
-  border-radius: var(--tk-key-radius);
+  height: 100%;
+  border: 0;
+  border-radius: 0;
   color: var(--tk-text);
-  background: var(--tk-key-bg);
-  box-shadow: var(--tk-key-shadow);
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
   transition: color 0.1s, background 0.1s, border-color 0.1s;
+}
+
+.tk-voice-action-label {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.tk-voice-action--cancel,
+.tk-voice-action--continue {
+  border-right: 1px solid var(--ide-border);
+}
+
+.tk-keyboard[data-voice-hold="true"] .tk-voice-action--cancel,
+.tk-keyboard[data-voice-hold="true"] .tk-voice-action--commit {
+  color: #ffffff;
+  background: var(--ide-accent);
+  border-color: var(--ide-accent);
+  pointer-events: auto;
+}
+
+.tk-keyboard[data-voice-hold="true"] .tk-voice-action--cancel {
+  flex-direction: column;
+  gap: 0;
 }
 
 .tk-voice-action--commit {
@@ -413,4 +414,10 @@
   color: #ffffff;
   background: var(--ide-accent);
   border-color: var(--ide-accent);
+}
+
+.tk-keyboard[data-voice-hold="true"] .tk-voice-action--continue {
+  color: var(--ide-accent);
+  background: transparent;
+  border-color: var(--ide-border);
 }

@@ -96,7 +96,7 @@ export async function fetchBinaryAsset(
   onStatus?.("loading", t("settings.speech.status.checkingCache", { label: displayLabel }));
   const cached = await getFromDB(cacheKey);
   if (cached) {
-    onStatus?.("loading", t("settings.speech.status.loadedFromCache", { label: displayLabel }));
+    onStatus?.("loading", t("settings.speech.status.loadingCachedAsset", { label: displayLabel }));
     return cached;
   }
 

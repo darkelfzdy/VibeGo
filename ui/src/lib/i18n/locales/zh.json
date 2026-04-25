@@ -357,6 +357,8 @@
         "releaseToCancel": "松手取消",
         "releaseToSend": "松手发送",
         "releaseToContinue": "松手继续识别",
+        "tapToCancel": "轻触取消",
+        "tapToSend": "轻触发送",
         "stop": "停止语音输入"
       },
       "assets": {
@@ -375,6 +377,7 @@
         "initializing": "正在初始化...",
         "checkingCache": "正在检查 {label} 缓存...",
         "loadedFromCache": "已从本地缓存加载 {label}",
+        "loadingCachedAsset": "正在加载 {label}...",
         "downloadingAsset": "正在下载 {label}...",
         "downloadProgress": "{label} {percent}% ({loaded}/{total}MB)",
         "downloadLoaded": "{label} 正在下载... ({loaded}MB)"

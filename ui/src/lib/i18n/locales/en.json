@@ -348,6 +348,8 @@
         "releaseToCancel": "Release to cancel",
         "releaseToSend": "Release to send",
         "releaseToContinue": "Release to keep recording",
+        "tapToCancel": "Tap to cancel",
+        "tapToSend": "Tap to send",
         "stop": "Stop speech input"
       },
       "assets": {
@@ -366,6 +368,7 @@
         "initializing": "Initializing...",
         "checkingCache": "Checking cache for {label}...",
         "loadedFromCache": "Loaded {label} from local cache.",
+        "loadingCachedAsset": "Loading {label}...",
         "downloadingAsset": "Downloading {label}...",
         "downloadProgress": "{label} {percent}% ({loaded}/{total}MB)",
         "downloadLoaded": "{label} downloading... ({loaded}MB)"
