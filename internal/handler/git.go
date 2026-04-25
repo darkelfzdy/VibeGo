@@ -43,10 +43,10 @@ func (h *GitHandler) getGitAuthor() (string, string) {
 		email, _ = h.settings.Get("gitUserEmail")
 	}
 	if author == "" {
-		author = "VibeGo User"
+		author = defaultGitUserNameValue()
 	}
 	if email == "" {
-		email = "user@vibego.local"
+		email = defaultGitUserEmailValue()
 	}
 	return author, email
 }

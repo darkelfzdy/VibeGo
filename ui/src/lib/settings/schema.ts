@@ -139,7 +139,7 @@ export const SETTINGS_SCHEMA: SettingSchema[] = [
     category: "git",
     labelKey: "settings.gitUserName.label",
     descriptionKey: "settings.gitUserName.description",
-    defaultValue: "",
+    defaultValue: "VibeGo User",
   },
   {
     key: "gitUserEmail",
@@ -147,7 +147,7 @@ export const SETTINGS_SCHEMA: SettingSchema[] = [
     category: "git",
     labelKey: "settings.gitUserEmail.label",
     descriptionKey: "settings.gitUserEmail.description",
-    defaultValue: "",
+    defaultValue: "user@vibego.local",
   },
   {
     key: "gitDefaultCommitMessage",
