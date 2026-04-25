@@ -75,5 +75,5 @@ func TestASRInfoEnabled(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), "enabled")
 	assert.Contains(t, w.Body.String(), "true")
-	assert.Contains(t, w.Body.String(), "/sherpa/")
+	assert.Contains(t, w.Body.String(), "https://huggingface.co/")
 }

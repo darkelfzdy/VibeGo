@@ -8,6 +8,8 @@ const BaseURL = "/sherpa/"
 const DefaultVersion = "1.12.36"
 const defaultOfficialRevision = "946a732f862b70f4cd1ab094abd907c01f1ccff8"
 const defaultOfficialBaseURL = "https://huggingface.co/spaces/k2-fsa/web-assembly-vad-asr-sherpa-onnx-zh-en-ja-ko-cantonese-sense-voice/resolve/" + defaultOfficialRevision + "/"
+const defaultWasmFile = "sherpa-onnx-wasm-main-vad-asr.wasm"
+const defaultDataFile = "sherpa-onnx-wasm-main-vad-asr.data"
 
 type Config struct {
 	Version string
@@ -44,17 +46,17 @@ func discover(cfg Config) Info {
 	}
 	wasmURL := strings.TrimSpace(cfg.WasmURL)
 	if wasmURL == "" {
-		wasmURL = BaseURL + "sherpa-onnx-wasm-main-vad-asr.wasm"
+		wasmURL = defaultOfficialBaseURL + defaultWasmFile
 	}
 	dataURL := strings.TrimSpace(cfg.DataURL)
 	if dataURL == "" {
-		dataURL = BaseURL + "sherpa-onnx-wasm-main-vad-asr.data"
+		dataURL = defaultOfficialBaseURL + defaultDataFile
 	}
 
 	return Info{
 		Enabled: true,
 		Version: ver,
-		BaseURL: BaseURL,
+		BaseURL: defaultOfficialBaseURL,
 		WasmURL: wasmURL,
 		DataURL: dataURL,
 	}

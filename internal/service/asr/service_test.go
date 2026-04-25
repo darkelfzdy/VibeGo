@@ -8,14 +8,14 @@ func TestNewWithDefaults(t *testing.T) {
 	if !info.Enabled {
 		t.Fatalf("expected enabled info, got %#v", info)
 	}
-	if info.BaseURL != BaseURL {
+	if info.BaseURL != defaultOfficialBaseURL {
 		t.Fatalf("base url = %q", info.BaseURL)
 	}
-	if info.WasmURL == "" {
-		t.Fatal("expected wasm url")
+	if info.WasmURL != defaultOfficialBaseURL+defaultWasmFile {
+		t.Fatalf("wasm url = %q", info.WasmURL)
 	}
-	if info.DataURL == "" {
-		t.Fatal("expected data url")
+	if info.DataURL != defaultOfficialBaseURL+defaultDataFile {
+		t.Fatalf("data url = %q", info.DataURL)
 	}
 }
 

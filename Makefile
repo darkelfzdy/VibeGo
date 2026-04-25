@@ -34,7 +34,7 @@ build: build-frontend
 download-sherpa:
 	@bash scripts/download-sherpa.sh
 
-build-frontend: download-sherpa
+build-frontend:
 	cd $(UI_DIR) && pnpm install --frozen-lockfile
 	cd $(UI_DIR) && pnpm run build
 
