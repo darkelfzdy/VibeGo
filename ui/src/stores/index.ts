@@ -40,6 +40,7 @@ export {
   resetGitStores,
   useGitStore,
 } from "@/stores/git-store";
+export { useKeyboardStore } from "@/stores/keyboard-store";
 export {
   getLanguageFromExtension,
   getPreviewType,
@@ -55,4 +56,3 @@ export {
   type TerminalSession,
   useTerminalStore,
 } from "@/stores/terminal-store";
-export { useKeyboardStore } from "@/stores/keyboard-store";

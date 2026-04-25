@@ -23,13 +23,13 @@ import type {
 } from "@/api/git";
 import { gitApi } from "@/api/git";
 import { useDialog } from "@/components/common";
+import BranchSelector from "@/components/git/branch-selector";
+import GitChangesView from "@/components/git/git-changes-view";
+import GitHistoryView from "@/components/git/git-history-view";
 import { usePageTopBar } from "@/hooks/use-page-top-bar";
 import { getTranslation, type Locale } from "@/lib/i18n";
 import { getOrCreateGitStore, useGitStore } from "@/stores";
 import { useSessionStore } from "@/stores/session-store";
-import BranchSelector from "@/components/git/branch-selector";
-import GitChangesView from "@/components/git/git-changes-view";
-import GitHistoryView from "@/components/git/git-history-view";
 
 interface GitDiffRequest {
   original: string;

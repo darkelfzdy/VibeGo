@@ -1,10 +1,10 @@
 import { GitGraph } from "lucide-react";
 import React, { useCallback } from "react";
 import { ConflictView, DiffView, GitView } from "@/components/git";
-import { getOrCreateGitStore, useFrameStore } from "@/stores";
-import { useAppStore } from "@/stores/app-store";
 import { registerPage } from "@/pages/registry";
 import type { PageViewProps } from "@/pages/types";
+import { getOrCreateGitStore, useFrameStore } from "@/stores";
+import { useAppStore } from "@/stores/app-store";
 
 interface GitDiffTabPayload {
   original: string;

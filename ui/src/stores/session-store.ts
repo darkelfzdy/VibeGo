@@ -1,18 +1,18 @@
 import { create } from "zustand";
 import { fileApi } from "@/api/file";
+import { type SessionInfo, sessionApi, type WorkspaceState } from "@/api/session";
 import { settingsApi } from "@/api/settings";
-import { type SessionInfo, type WorkspaceState, sessionApi } from "@/api/session";
 import { terminalApi } from "@/api/terminal";
 import { cleanupAllTerminals } from "@/services/terminal-cleanup-service";
 import {
   type FileManagerState,
-  type SortField,
-  type SortOrder,
-  type ViewMode,
   getOrCreateFileManagerStore,
   removeFileManagerStore,
   resetFileManagerStores,
+  type SortField,
+  type SortOrder,
   subscribeFileManagerStoreChanges,
+  type ViewMode,
 } from "@/stores/file-manager-store";
 import { type GenericGroup, type GroupPage, type ToolGroup, useFrameStore } from "@/stores/frame-store";
 import * as gitStoreModule from "@/stores/git-store";

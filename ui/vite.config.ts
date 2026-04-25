@@ -1,7 +1,7 @@
+import { createReadStream, type Stats, statSync } from "node:fs";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { createReadStream, statSync, type Stats } from "node:fs";
-import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "path";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";

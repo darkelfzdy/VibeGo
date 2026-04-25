@@ -1,16 +1,16 @@
 import { AlertCircle, Code, Download, FileQuestion, Loader2 } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { fileApi } from "@/api/file";
-import { useTranslation } from "@/lib/i18n";
-import { useAppStore } from "@/stores";
-import type { FileItem } from "@/stores/file-manager-store";
-import { getPreviewType, usePreviewStore } from "@/stores/preview-store";
 import CodePreview from "@/components/preview/code-preview";
 import ImagePreview from "@/components/preview/image-preview";
 import MarkdownPreview from "@/components/preview/markdown-preview";
 import MediaPreview from "@/components/preview/media-preview";
 import PDFPreview from "@/components/preview/pdf-preview";
 import { formatFileSize, isFileTooLarge } from "@/components/preview/utils";
+import { useTranslation } from "@/lib/i18n";
+import { useAppStore } from "@/stores";
+import type { FileItem } from "@/stores/file-manager-store";
+import { getPreviewType, usePreviewStore } from "@/stores/preview-store";
 
 interface FilePreviewProps {
   file: FileItem | null;

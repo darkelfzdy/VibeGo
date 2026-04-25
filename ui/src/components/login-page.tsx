@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Lock, Terminal } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { authApi } from "@/api/auth";
 
 const AUTH_KEY_STORAGE = "vibego_auth_key";

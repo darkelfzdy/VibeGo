@@ -130,9 +130,14 @@ export const MESSAGE_COLLAPSED_LENGTH = 900;
 export interface SessionOutlineItem {
   index: number;
   content: string;
+  role: string;
+  level: number;
 }
 
 const OUTLINE_TITLE_MAX_CHARS = 96;
+const OUTLINE_ITEM_LIMIT = 160;
+const OUTLINE_PRIMARY_LINES_PER_MESSAGE = 1;
+const OUTLINE_DETAIL_LINES_PER_MESSAGE = 5;
 
 function truncateText(value: string, limit: number) {
   const trimmed = value.trim();
@@ -166,10 +171,12 @@ function isGeneratedContextMessage(value: string) {
 
 function normalizeOutlineLine(value: string) {
   return value
+    .replace(/^\s*[-*+]\s+\[[ x]\]\s+/i, "")
     .replace(/^#{1,6}\s+/, "")
     .replace(/^[-*+]\s+/, "")
     .replace(/^\d+[.)]\s+/, "")
     .replace(/^>\s+/, "")
+    .replace(/^\*\*(.+?)\*\*:?\s*$/, "$1")
     .trim();
 }
 
@@ -183,18 +190,81 @@ function isUsefulOutlineLine(value: string) {
   if (/^\[[a-z_ -]+:\s*.+\]$/i.test(value)) {
     return false;
   }
+  if (/^[{}[\],:;]+$/.test(value)) {
+    return false;
+  }
+  if (/^(import|export|const|let|var|function|class|return|if|for|while|switch)\b/.test(value)) {
+    return false;
+  }
   return /[\p{L}\p{N}]/u.test(value);
 }
 
-function extractOutlineTitle(content: string) {
+function outlineLineLevel(rawLine: string) {
+  const line = rawLine.trim();
+  const heading = /^(#{1,6})\s+/.exec(line);
+  if (heading) {
+    return Math.min(heading[1].length - 1, 2);
+  }
+  if (/^[-*+]\s+\[[ x]\]\s+/i.test(line)) {
+    return 2;
+  }
+  if (/^[-*+]\s+/.test(line) || /^\d+[.)]\s+/.test(line)) {
+    return 1;
+  }
+  if (/^>\s+/.test(line)) {
+    return 1;
+  }
+  if (/^\*\*.+?\*\*:?\s*$/.test(line)) {
+    return 1;
+  }
+  return 0;
+}
+
+function isStructuredOutlineLine(rawLine: string) {
+  const line = rawLine.trim();
+  return (
+    /^#{1,6}\s+/.test(line) ||
+    /^[-*+]\s+/.test(line) ||
+    /^\d+[.)]\s+/.test(line) ||
+    /^>\s+/.test(line) ||
+    /^\*\*.+?\*\*:?\s*$/.test(line)
+  );
+}
+
+function extractOutlineLines(content: string, role: string) {
   const trimmed = content.trim();
   if (!trimmed || isGeneratedContextMessage(trimmed)) {
-    return "";
+    return [];
   }
   const cleaned = stripTaggedBlocks(stripCodeBlocks(trimmed));
-  const lines = cleaned.split(/\r?\n/).map(normalizeOutlineLine).filter(isUsefulOutlineLine);
-  const heading = lines.find((line) => line.length >= 4) || lines[0] || "";
-  return truncateText(heading, OUTLINE_TITLE_MAX_CHARS);
+  const seen = new Set<string>();
+  const primary: SessionOutlineItem[] = [];
+  const details: SessionOutlineItem[] = [];
+  for (const rawLine of cleaned.split(/\r?\n/)) {
+    const normalized = normalizeOutlineLine(rawLine);
+    if (!isUsefulOutlineLine(normalized) || normalized.length < 4) {
+      continue;
+    }
+    const content = truncateText(normalized, OUTLINE_TITLE_MAX_CHARS);
+    const key = content.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    const item = { index: -1, content, role, level: outlineLineLevel(rawLine) };
+    if (primary.length < OUTLINE_PRIMARY_LINES_PER_MESSAGE && item.level === 0) {
+      primary.push(item);
+      continue;
+    }
+    if (details.length < OUTLINE_DETAIL_LINES_PER_MESSAGE && isStructuredOutlineLine(rawLine)) {
+      details.push({ ...item, level: Math.max(item.level, 1) });
+      continue;
+    }
+    if (primary.length < OUTLINE_PRIMARY_LINES_PER_MESSAGE) {
+      primary.push(item);
+    }
+  }
+  return [...primary, ...details];
 }
 
 export function isLongAISessionMessage(content: string) {
@@ -206,18 +276,24 @@ export function isLongAISessionMessage(content: string) {
 export function buildSessionOutlineItems(messages: AISessionMessage[]): SessionOutlineItem[] {
   const items: SessionOutlineItem[] = [];
   for (const [index, message] of messages.entries()) {
-    if (message.role.toLowerCase() !== "user") {
+    const role = message.role.toLowerCase();
+    if (role === "tool" || role === "system") {
       continue;
     }
-    const content = extractOutlineTitle(message.content);
-    if (!content) {
+    const outlines = extractOutlineLines(message.content, role);
+    if (outlines.length === 0) {
       continue;
     }
-    const previous = items[items.length - 1];
-    if (previous?.content.toLowerCase() === content.toLowerCase()) {
-      continue;
+    for (const outline of outlines) {
+      const previous = items[items.length - 1];
+      if (previous?.content.toLowerCase() === outline.content.toLowerCase() && previous.role === outline.role) {
+        continue;
+      }
+      items.push({ ...outline, index });
+      if (items.length >= OUTLINE_ITEM_LIMIT) {
+        return items;
+      }
     }
-    items.push({ index, content });
   }
   return items;
 }

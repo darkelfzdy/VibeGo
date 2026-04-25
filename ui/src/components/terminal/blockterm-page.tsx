@@ -60,6 +60,12 @@ interface BlockTermPageProps {
 }
 
 const MARK_PREFIX = "__VIBEGO_BLOCKTERM__";
+const ESC = String.fromCharCode(27);
+const BEL = String.fromCharCode(7);
+const OSC_SEQUENCE_RE = new RegExp(`${ESC}\\][^${BEL}]*(?:${BEL}|${ESC}\\\\)`, "g");
+const CSI_SEQUENCE_RE = new RegExp(`${ESC}\\[[0-?]*[ -/]*[@-~]`, "g");
+const CHARSET_SEQUENCE_RE = new RegExp(`${ESC}[()][A-Za-z0-9]`, "g");
+const TUI_SEQUENCE_RE = new RegExp(`${ESC}\\[\\?(?:47|1047|1049)h`);
 const MAX_TEXT_OUTPUT_LENGTH = 200_000;
 const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
@@ -159,9 +165,9 @@ function buildWrappedCommand(command: string, blockId: string): string {
 
 function stripAnsiForText(value: string): string {
   return value
-    .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "")
-    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")
-    .replace(/\x1b[()][A-Za-z0-9]/g, "")
+    .replace(OSC_SEQUENCE_RE, "")
+    .replace(CSI_SEQUENCE_RE, "")
+    .replace(CHARSET_SEQUENCE_RE, "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n");
 }
@@ -182,7 +188,7 @@ function extractSegmentsFromBuffer(value: string): { segments: TerminalSegment[]
     if (markerStart === -1) break;
     if (markerStart > index) {
       const text = value.slice(index, markerStart);
-      segments.push({ type: "text", value: text, hasTuiSequence: /\x1b\[\?(?:47|1047|1049)h/.test(text) });
+      segments.push({ type: "text", value: text, hasTuiSequence: TUI_SEQUENCE_RE.test(text) });
     }
     const terminator = findOscTerminator(value, markerStart + 6);
     if (!terminator) return { segments, rest: value.slice(markerStart) };
@@ -218,11 +224,11 @@ function extractSegmentsFromBuffer(value: string): { segments: TerminalSegment[]
   }
   if (partialIndex >= 0) {
     const text = trailing.slice(0, partialIndex);
-    if (text) segments.push({ type: "text", value: text, hasTuiSequence: /\x1b\[\?(?:47|1047|1049)h/.test(text) });
+    if (text) segments.push({ type: "text", value: text, hasTuiSequence: TUI_SEQUENCE_RE.test(text) });
     return { segments, rest: trailing.slice(partialIndex) };
   }
   if (trailing) {
-    segments.push({ type: "text", value: trailing, hasTuiSequence: /\x1b\[\?(?:47|1047|1049)h/.test(trailing) });
+    segments.push({ type: "text", value: trailing, hasTuiSequence: TUI_SEQUENCE_RE.test(trailing) });
   }
   return { segments, rest: "" };
 }
@@ -230,7 +236,12 @@ function extractSegmentsFromBuffer(value: string): { segments: TerminalSegment[]
 function shouldUseTerminalMode(command: string): boolean {
   const trimmed = command.trim();
   if (!trimmed) return false;
-  const firstToken = trimmed.match(/^(?:sudo\s+|env\s+)*(?:[\w./-]+)/)?.[0].trim().split(/\s+/).pop() || "";
+  const firstToken =
+    trimmed
+      .match(/^(?:sudo\s+|env\s+)*(?:[\w./-]+)/)?.[0]
+      .trim()
+      .split(/\s+/)
+      .pop() || "";
   const commandName = firstToken.split("/").pop() || firstToken;
   if (TUI_COMMANDS.has(commandName)) return true;
   if (/\|\s*(less|more|fzf)\b/.test(trimmed)) return true;
@@ -287,7 +298,10 @@ const BlockTerminalView: React.FC<{
           <Server size={14} />
           <span>{isActive ? "TUI" : "TUI snapshot"}</span>
         </div>
-        <button className="p-1.5 text-ide-mute hover:text-ide-text hover:bg-ide-bg rounded" onClick={onToggleFullscreen}>
+        <button
+          className="p-1.5 text-ide-mute hover:text-ide-text hover:bg-ide-bg rounded"
+          onClick={onToggleFullscreen}
+        >
           {fullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
         </button>
       </div>
@@ -393,35 +407,32 @@ const BlockTermPage: React.FC<BlockTermPageProps> = ({ groupId }) => {
     [updateSessionBlock, writeTerminalOutput]
   );
 
-  const finishBlock = useCallback(
-    (sessionId: string, blockId: string, exitCode: number, nextCwd?: string) => {
-      sessionActiveBlockRef.current[sessionId] = null;
-      setSessions((items) =>
-        items.map((session) =>
-          session.id === sessionId
-            ? {
-                ...session,
-                cwd: nextCwd || session.cwd,
-                status: "ready",
-                activeBlockId: null,
-                blocks: session.blocks.map((block) =>
-                  block.id === blockId
-                    ? {
-                        ...block,
-                        cwd: nextCwd || block.cwd,
-                        exitCode,
-                        finishedAt: Date.now(),
-                        status: block.status === "interrupted" ? "interrupted" : exitCode === 0 ? "success" : "error",
-                      }
-                    : block
-                ),
-              }
-            : session
-        )
-      );
-    },
-    []
-  );
+  const finishBlock = useCallback((sessionId: string, blockId: string, exitCode: number, nextCwd?: string) => {
+    sessionActiveBlockRef.current[sessionId] = null;
+    setSessions((items) =>
+      items.map((session) =>
+        session.id === sessionId
+          ? {
+              ...session,
+              cwd: nextCwd || session.cwd,
+              status: "ready",
+              activeBlockId: null,
+              blocks: session.blocks.map((block) =>
+                block.id === blockId
+                  ? {
+                      ...block,
+                      cwd: nextCwd || block.cwd,
+                      exitCode,
+                      finishedAt: Date.now(),
+                      status: block.status === "interrupted" ? "interrupted" : exitCode === 0 ? "success" : "error",
+                    }
+                  : block
+              ),
+            }
+          : session
+      )
+    );
+  }, []);
 
   const handleTerminalData = useCallback(
     (sessionId: string, raw: string) => {
@@ -521,9 +532,11 @@ const BlockTermPage: React.FC<BlockTermPageProps> = ({ groupId }) => {
             updateTerminal(groupId, sessionId, {
               currentCwd: typeof msg.current_cwd === "string" ? msg.current_cwd : undefined,
               readonly: !!msg.readonly,
-              status: msg.status === "running" || msg.status === "exited" || msg.status === "closed" ? msg.status : undefined,
+              status:
+                msg.status === "running" || msg.status === "exited" || msg.status === "closed" ? msg.status : undefined,
             });
-            if (typeof msg.current_cwd === "string" && msg.current_cwd) setSessionPatch(sessionId, { cwd: msg.current_cwd });
+            if (typeof msg.current_cwd === "string" && msg.current_cwd)
+              setSessionPatch(sessionId, { cwd: msg.current_cwd });
             return;
           }
           if (msg.type === "output" || msg.type === "replay") {
@@ -603,9 +616,12 @@ const BlockTermPage: React.FC<BlockTermPageProps> = ({ groupId }) => {
     };
   }, []);
 
-  const setDraft = useCallback((sessionId: string, draft: string) => {
-    setSessionPatch(sessionId, { draft });
-  }, [setSessionPatch]);
+  const setDraft = useCallback(
+    (sessionId: string, draft: string) => {
+      setSessionPatch(sessionId, { draft });
+    },
+    [setSessionPatch]
+  );
 
   const runCommand = useCallback(
     (sessionId: string, command: string) => {
@@ -749,7 +765,9 @@ const BlockTermPage: React.FC<BlockTermPageProps> = ({ groupId }) => {
       terminal.open(element);
       fitAddon.fit();
       terminal.onData((data) => {
-        const sessionId = Object.entries(sessionActiveBlockRef.current).find(([, activeBlockId]) => activeBlockId === blockId)?.[0];
+        const sessionId = Object.entries(sessionActiveBlockRef.current).find(
+          ([, activeBlockId]) => activeBlockId === blockId
+        )?.[0];
         if (sessionId) sendInput(sessionId, data);
       });
       xtermRefs.current.set(blockId, { fitAddon, terminal });
@@ -787,7 +805,11 @@ const BlockTermPage: React.FC<BlockTermPageProps> = ({ groupId }) => {
         <div className="flex items-center gap-2 min-w-0">
           <Server size={16} className="text-ide-accent shrink-0" />
           <span className="text-sm font-medium text-ide-text shrink-0">{t("plugin.blockTerm.title")}</span>
-          {activeSession && <span className="text-xs text-ide-mute truncate hidden sm:inline">/{getCompactPath(activeSession.cwd)}</span>}
+          {activeSession && (
+            <span className="text-xs text-ide-mute truncate hidden sm:inline">
+              /{getCompactPath(activeSession.cwd)}
+            </span>
+          )}
         </div>
       ),
       rightButtons: [
@@ -862,7 +884,10 @@ const BlockTermPage: React.FC<BlockTermPageProps> = ({ groupId }) => {
                         {block.exitCode !== null ? ` · ${block.exitCode}` : ""}
                       </span>
                       {isRunning ? (
-                        <button className="p-1.5 text-ide-mute hover:text-yellow-500 hover:bg-ide-bg" onClick={() => stopSession(activeSession.id)}>
+                        <button
+                          className="p-1.5 text-ide-mute hover:text-yellow-500 hover:bg-ide-bg"
+                          onClick={() => stopSession(activeSession.id)}
+                        >
                           <Square size={14} />
                         </button>
                       ) : (
@@ -881,7 +906,10 @@ const BlockTermPage: React.FC<BlockTermPageProps> = ({ groupId }) => {
                         {copiedId === block.id ? <Check size={14} /> : <Copy size={14} />}
                       </button>
                       {!isRunning && (
-                        <button className="p-1.5 text-ide-mute hover:text-red-500 hover:bg-ide-bg" onClick={() => deleteBlock(block.id)}>
+                        <button
+                          className="p-1.5 text-ide-mute hover:text-red-500 hover:bg-ide-bg"
+                          onClick={() => deleteBlock(block.id)}
+                        >
                           <Trash2 size={14} />
                         </button>
                       )}
@@ -894,7 +922,9 @@ const BlockTermPage: React.FC<BlockTermPageProps> = ({ groupId }) => {
                       isActive={isRunning}
                       onMount={mountTerminal}
                       onUnmount={unmountTerminal}
-                      onToggleFullscreen={() => setFullscreenBlockId((current) => (current === block.id ? null : block.id))}
+                      onToggleFullscreen={() =>
+                        setFullscreenBlockId((current) => (current === block.id ? null : block.id))
+                      }
                     />
                   ) : (
                     <pre

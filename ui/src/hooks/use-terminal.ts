@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { terminalApi } from "@/api/terminal";
-import { useSessionStore } from "@/stores/session-store";
 import { useTerminalStore } from "@/stores";
+import { useSessionStore } from "@/stores/session-store";
 
 export const terminalKeys = {
   all: ["terminals"] as const,

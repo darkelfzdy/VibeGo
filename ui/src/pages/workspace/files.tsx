@@ -2,9 +2,9 @@ import { Files } from "lucide-react";
 import React, { useCallback } from "react";
 import { FileManager } from "@/components/file";
 import { FilePreview } from "@/components/preview";
-import { type FileItem, useFrameStore } from "@/stores";
 import { registerPage } from "@/pages/registry";
 import type { PageViewProps } from "@/pages/types";
+import { type FileItem, useFrameStore } from "@/stores";
 
 const FilesView: React.FC<PageViewProps> = ({ context }) => {
   const tabs = useFrameStore((s) => s.getCurrentTabs());

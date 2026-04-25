@@ -16,9 +16,9 @@ import {
 } from "lucide-react";
 import React, { useCallback, useMemo, useState } from "react";
 import type { StashEntry } from "@/api/git";
+import GitCommitComposer from "@/components/git/git-commit-composer";
 import { getTranslation, type Locale } from "@/lib/i18n";
 import type { GitFileNode } from "@/stores";
-import GitCommitComposer from "@/components/git/git-commit-composer";
 
 type FileSelectionType = "all" | "partial" | "none";
 

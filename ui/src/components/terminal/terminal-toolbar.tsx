@@ -1,9 +1,9 @@
 import { LayoutList, Plus, Trash2 } from "lucide-react";
 import React from "react";
+import TerminalTabs from "@/components/terminal/terminal-tabs";
 import { useTranslation } from "@/lib/i18n";
 import { useAppStore } from "@/stores";
 import type { TerminalSession } from "@/stores/terminal-store";
-import TerminalTabs from "@/components/terminal/terminal-tabs";
 
 interface TerminalToolbarProps {
   terminals: TerminalSession[];

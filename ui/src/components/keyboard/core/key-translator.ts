@@ -87,7 +87,7 @@ export function translateKeyEvent(event: KeyEvent): TranslatedAction {
   if (meta) return { type: "none" };
 
   if (event.type === "char") {
-    let ch = value;
+    const ch = value;
     if (ctrl && ch.length === 1) {
       const code = ch.toLowerCase().charCodeAt(0);
       if (code >= 97 && code <= 122) {

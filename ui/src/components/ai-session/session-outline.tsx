@@ -1,10 +1,7 @@
 import { ListTree } from "lucide-react";
+import type { SessionOutlineItem } from "@/components/ai-session/utils";
+import { roleLabel, roleLabelTone } from "@/components/ai-session/utils";
 import { cn } from "@/lib/utils";
-
-interface SessionOutlineItem {
-  index: number;
-  content: string;
-}
 
 interface SessionOutlineProps {
   compact: boolean;
@@ -33,9 +30,22 @@ const SessionOutline: React.FC<SessionOutlineProps> = ({ compact, items, t, onSe
               key={`${item.index}-${index}`}
               type="button"
               onClick={() => onSelect(item.index)}
-              className="w-full rounded-md border border-ide-border bg-ide-panel px-3 py-2 text-left text-xs text-ide-mute transition-colors hover:border-ide-accent/40 hover:bg-ide-bg hover:text-ide-text"
+              className={cn(
+                "w-full rounded-md border border-ide-border bg-ide-panel py-2 pr-3 text-left text-xs text-ide-mute transition-colors hover:border-ide-accent/40 hover:bg-ide-bg hover:text-ide-text",
+                item.level <= 0 ? "pl-3" : item.level === 1 ? "pl-5" : "pl-7"
+              )}
             >
-              <div className="line-clamp-2">{item.content}</div>
+              <div className="flex min-w-0 items-start gap-2">
+                <span
+                  className={cn(
+                    "mt-0.5 shrink-0 rounded border px-1 py-0 text-[10px] leading-4",
+                    roleLabelTone(item.role)
+                  )}
+                >
+                  {roleLabel(item.role, t)}
+                </span>
+                <span className="line-clamp-2 min-w-0 flex-1">{item.content}</span>
+              </div>
             </button>
           ))
         )}

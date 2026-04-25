@@ -18,6 +18,9 @@ import React, { useCallback, useEffect, useRef } from "react";
 import { useStore } from "zustand";
 import { fileApi } from "@/api/file";
 import { useDialog } from "@/components/common";
+import FileDetailSheet from "@/components/file/file-detail-sheet";
+import FileManagerBreadcrumb from "@/components/file/file-manager-breadcrumb";
+import FileManagerToolbar from "@/components/file/file-manager-toolbar";
 import { useFrameController } from "@/framework/frame/controller";
 import { getIntlLocale, type Locale, useTranslation } from "@/lib/i18n";
 import { useSettingsStore } from "@/lib/settings";
@@ -27,9 +30,6 @@ import {
   fileManagerStore,
   getOrCreateFileManagerStore,
 } from "@/stores/file-manager-store";
-import FileDetailSheet from "@/components/file/file-detail-sheet";
-import FileManagerBreadcrumb from "@/components/file/file-manager-breadcrumb";
-import FileManagerToolbar from "@/components/file/file-manager-toolbar";
 
 function formatFileSize(bytes: number): string {
   if (bytes === 0) return "0 B";
