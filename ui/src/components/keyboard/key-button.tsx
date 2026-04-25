@@ -8,8 +8,8 @@ import {
   ArrowRightToLine,
   ArrowUp,
   BoxSelect,
-  Check,
   CheckSquare,
+  ChevronDown,
   ChevronsDown,
   ChevronsUp,
   ClipboardList,
@@ -20,11 +20,9 @@ import {
   Keyboard,
   Mic,
   MoveHorizontal,
-  PanelBottomClose,
   Scissors,
   Smile,
   Undo2,
-  X,
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyDef, SwipeDir } from "@/components/keyboard/core/types";
@@ -33,11 +31,13 @@ import { getSwipeDirection, isSpecialKey, MODIFIER_KEYS, SWIPE_DIRS } from "@/co
 const SWIPE_THRESHOLD = 18;
 const SLIDE_STEP = 18;
 const LONG_PRESS_DELAY = 800;
+const VOICE_LONG_PRESS_DELAY = 320;
+const VOICE_SLIDE_CANCEL_THRESHOLD = 56;
+const VOICE_TARGET_MOVE_THRESHOLD = 28;
 const REPEAT_INTERVAL = 120;
 const VOICE_VERTICAL_THRESHOLD = 22;
-const VOICE_CHOICE_THRESHOLD = 36;
-type KeyOutputAction = "start" | "stop" | "cancel";
-type VoiceTarget = "cancel" | "commit";
+type KeyOutputAction = "start" | "stop" | "cancel" | "continue";
+export type VoiceReleaseTarget = "cancel" | "continue" | "commit";
 
 const DISPLAY_LABELS: Record<string, React.ReactNode> = {
   ArrowUp: <ArrowUp size={12} strokeWidth={2.5} />,
@@ -62,7 +62,7 @@ const DISPLAY_LABELS: Record<string, React.ReactNode> = {
   Paste: <ClipboardPaste size={12} strokeWidth={2.5} />,
   Clipboard: <ClipboardList size={12} strokeWidth={2.5} />,
   Keyboard: <Keyboard size={12} strokeWidth={2.5} />,
-  DismissKeyboard: <PanelBottomClose size={12} strokeWidth={2.5} />,
+  DismissKeyboard: <ChevronDown size={10} strokeWidth={2.7} />,
   Emoji: <Smile size={12} strokeWidth={2.5} />,
   Mic: <Mic size={12} strokeWidth={2.5} />,
   Caps: <ArrowBigUpDash size={12} strokeWidth={2.5} />,
@@ -82,15 +82,31 @@ interface KeyButtonProps {
   shiftActive?: boolean;
   onKeyOutput: (value: string, special: boolean, action?: KeyOutputAction) => void;
   onSlide: (dir: "left" | "right") => void;
+  onVoiceTargetChange?: (target: VoiceReleaseTarget | null) => void;
   edge?: "left" | "right";
 }
 
-const KeyButton: React.FC<KeyButtonProps> = ({ keyDef, modState, shiftActive, onKeyOutput, onSlide, edge }) => {
+const resolveVoiceTarget = (clientX: number, el: HTMLElement): VoiceReleaseTarget => {
+  const keyboard = el.closest(".tk-keyboard") as HTMLElement | null;
+  const rect = (keyboard || el).getBoundingClientRect();
+  const ratio = (clientX - rect.left) / Math.max(rect.width, 1);
+  if (ratio < 0.36) return "cancel";
+  if (ratio > 0.64) return "commit";
+  return "continue";
+};
+
+const KeyButton: React.FC<KeyButtonProps> = ({
+  keyDef,
+  modState,
+  shiftActive,
+  onKeyOutput,
+  onSlide,
+  onVoiceTargetChange,
+  edge,
+}) => {
   const [pressed, setPressed] = useState(false);
   const [swipeDir, setSwipeDir] = useState<SwipeDir | null>(null);
   const [sliding, setSliding] = useState(false);
-  const [voiceActive, setVoiceActive] = useState(false);
-  const [voiceTarget, setVoiceTarget] = useState<VoiceTarget | null>(null);
 
   const stateRef = useRef({
     startX: 0,
@@ -103,7 +119,7 @@ const KeyButton: React.FC<KeyButtonProps> = ({ keyDef, modState, shiftActive, on
     didSlide: false,
     firedByRepeat: false,
     isVoiceGesture: false,
-    voiceTarget: null as VoiceTarget | null,
+    voiceTarget: null as VoiceReleaseTarget | null,
   });
 
   const timersRef = useRef<{ delay?: ReturnType<typeof setTimeout>; interval?: ReturnType<typeof setInterval> }>({});
@@ -164,6 +180,9 @@ const KeyButton: React.FC<KeyButtonProps> = ({ keyDef, modState, shiftActive, on
         if (REQUIRES_GESTURE.has(resolved.value)) {
           navigator.vibrate?.(50);
           if (resolved.value === "Mic") {
+            stateRef.current.isVoiceGesture = true;
+            stateRef.current.voiceTarget = "commit";
+            onVoiceTargetChange?.("commit");
             onKeyOutput("Mic", true, "start");
           }
           return;
@@ -176,7 +195,7 @@ const KeyButton: React.FC<KeyButtonProps> = ({ keyDef, modState, shiftActive, on
         }, REPEAT_INTERVAL);
       }, LONG_PRESS_DELAY);
     },
-    [keyDef, resolveValue, onKeyOutput, clearTimers]
+    [keyDef, resolveValue, onKeyOutput, clearTimers, onVoiceTargetChange]
   );
 
   const handlePointerDown = useCallback(
@@ -198,31 +217,38 @@ const KeyButton: React.FC<KeyButtonProps> = ({ keyDef, modState, shiftActive, on
       setPressed(true);
       setSwipeDir(null);
       setSliding(false);
-      setVoiceActive(false);
-      setVoiceTarget(null);
+      onVoiceTargetChange?.(null);
 
       if (!keyDef.slider) {
         startLongPress(null);
       } else if (keyDef.sub) {
         clearTimers();
         const subVal = keyDef.sub.s;
-        if (subVal && subVal !== "Mic") {
-          timersRef.current.delay = setTimeout(() => {
-            if (stateRef.current.isSliding || stateRef.current.didSlide) return;
-            stateRef.current.firedByRepeat = true;
-            if (REQUIRES_GESTURE.has(subVal)) {
-              navigator.vibrate?.(50);
-              if (subVal === "Mic") {
-                onKeyOutput("Mic", true, "start");
+        if (subVal) {
+          timersRef.current.delay = setTimeout(
+            () => {
+              const movedX = Math.abs(stateRef.current.lastX - stateRef.current.startX);
+              if (subVal !== "Mic" && (stateRef.current.isSliding || stateRef.current.didSlide)) return;
+              if (subVal === "Mic" && movedX > VOICE_SLIDE_CANCEL_THRESHOLD) return;
+              stateRef.current.firedByRepeat = true;
+              if (REQUIRES_GESTURE.has(subVal)) {
+                navigator.vibrate?.(50);
+                if (subVal === "Mic") {
+                  stateRef.current.isVoiceGesture = true;
+                  stateRef.current.voiceTarget = "commit";
+                  onVoiceTargetChange?.("commit");
+                  onKeyOutput("Mic", true, "start");
+                }
+                return;
               }
-              return;
-            }
-            onKeyOutput(subVal, isSpecialKey(subVal) || true);
-          }, LONG_PRESS_DELAY);
+              onKeyOutput(subVal, isSpecialKey(subVal) || true);
+            },
+            subVal === "Mic" ? VOICE_LONG_PRESS_DELAY : LONG_PRESS_DELAY
+          );
         }
       }
     },
-    [keyDef, startLongPress, onKeyOutput, clearTimers]
+    [keyDef, startLongPress, onKeyOutput, clearTimers, onVoiceTargetChange]
   );
 
   const handlePointerMove = useCallback(
@@ -245,20 +271,21 @@ const KeyButton: React.FC<KeyButtonProps> = ({ keyDef, modState, shiftActive, on
             clearTimers();
             s.isVoiceGesture = true;
             s.firedByRepeat = true;
-            s.voiceTarget = null;
+            s.voiceTarget = resolveVoiceTarget(e.clientX, e.currentTarget as HTMLElement);
             setSliding(false);
-            setVoiceActive(true);
-            setVoiceTarget(null);
+            onVoiceTargetChange?.(s.voiceTarget);
             navigator.vibrate?.(50);
             onKeyOutput("Mic", true, "start");
           }
 
           if (s.isVoiceGesture) {
-            const nextTarget = dx < -VOICE_CHOICE_THRESHOLD ? "cancel" : dx > VOICE_CHOICE_THRESHOLD ? "commit" : null;
-            if (nextTarget !== s.voiceTarget) {
-              s.voiceTarget = nextTarget;
-              setVoiceTarget(nextTarget);
-              if (nextTarget) navigator.vibrate?.(18);
+            if (Math.abs(dx) > VOICE_TARGET_MOVE_THRESHOLD || dy < -VOICE_VERTICAL_THRESHOLD) {
+              const nextTarget = resolveVoiceTarget(e.clientX, e.currentTarget as HTMLElement);
+              if (nextTarget !== s.voiceTarget) {
+                s.voiceTarget = nextTarget;
+                onVoiceTargetChange?.(nextTarget);
+                if (nextTarget) navigator.vibrate?.(18);
+              }
             }
             s.lastX = e.clientX;
             return;
@@ -266,7 +293,8 @@ const KeyButton: React.FC<KeyButtonProps> = ({ keyDef, modState, shiftActive, on
         }
 
         const dist = Math.abs(dx);
-        if (dist > SWIPE_THRESHOLD && Math.abs(dx) >= Math.abs(dy)) {
+        const slideThreshold = hasVoiceGesture && !s.isVoiceGesture ? VOICE_SLIDE_CANCEL_THRESHOLD : SWIPE_THRESHOLD;
+        if (dist > slideThreshold && Math.abs(dx) >= Math.abs(dy)) {
           if (!s.isSliding) {
             s.isSliding = true;
             setSliding(true);
@@ -300,7 +328,7 @@ const KeyButton: React.FC<KeyButtonProps> = ({ keyDef, modState, shiftActive, on
         startLongPress(dir);
       }
     },
-    [keyDef, onSlide, clearTimers, startLongPress, onKeyOutput]
+    [keyDef, onSlide, clearTimers, startLongPress, onKeyOutput, onVoiceTargetChange]
   );
 
   const handlePointerUp = useCallback(
@@ -313,11 +341,11 @@ const KeyButton: React.FC<KeyButtonProps> = ({ keyDef, modState, shiftActive, on
 
       if (keyDef.slider === "horizontal") {
         if (s.isVoiceGesture) {
-          onKeyOutput("Mic", true, s.voiceTarget === "cancel" ? "cancel" : "stop");
+          const target = s.voiceTarget ?? "commit";
+          onKeyOutput("Mic", true, target === "cancel" ? "cancel" : target === "continue" ? "continue" : "stop");
           s.isVoiceGesture = false;
           s.voiceTarget = null;
-          setVoiceActive(false);
-          setVoiceTarget(null);
+          onVoiceTargetChange?.(null);
           setSliding(false);
           setPressed(false);
           return;
@@ -337,8 +365,7 @@ const KeyButton: React.FC<KeyButtonProps> = ({ keyDef, modState, shiftActive, on
         }
         setSliding(false);
         setPressed(false);
-        setVoiceActive(false);
-        setVoiceTarget(null);
+        onVoiceTargetChange?.(null);
         return;
       }
 
@@ -357,10 +384,9 @@ const KeyButton: React.FC<KeyButtonProps> = ({ keyDef, modState, shiftActive, on
 
       setPressed(false);
       setSwipeDir(null);
-      setVoiceActive(false);
-      setVoiceTarget(null);
+      onVoiceTargetChange?.(null);
     },
-    [keyDef, fireKey, clearTimers, resolveValue, onKeyOutput]
+    [keyDef, fireKey, clearTimers, resolveValue, onKeyOutput, onVoiceTargetChange]
   );
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -381,11 +407,10 @@ const KeyButton: React.FC<KeyButtonProps> = ({ keyDef, modState, shiftActive, on
       setPressed(false);
       setSwipeDir(null);
       setSliding(false);
-      setVoiceActive(false);
-      setVoiceTarget(null);
+      onVoiceTargetChange?.(null);
       onKeyOutput(value, true);
     },
-    [clearTimers, onKeyOutput]
+    [clearTimers, onKeyOutput, onVoiceTargetChange]
   );
 
   const isFnKey = keyDef.type === "modifier" || keyDef.type === "action";
@@ -463,19 +488,6 @@ const KeyButton: React.FC<KeyButtonProps> = ({ keyDef, modState, shiftActive, on
         );
       })}
       <span className={`tk-label${labelSmall ? " tk-label--small" : ""}`}>{displayLabel}</span>
-      {voiceActive && (
-        <div className="tk-voice-picker" data-target={voiceTarget ?? "commit"}>
-          <span className="tk-voice-choice tk-voice-choice--cancel">
-            <X size={22} strokeWidth={2.5} />
-          </span>
-          <span className="tk-voice-live">
-            <Mic size={20} strokeWidth={2.5} />
-          </span>
-          <span className="tk-voice-choice tk-voice-choice--commit">
-            <Check size={22} strokeWidth={2.5} />
-          </span>
-        </div>
-      )}
       {swipeSubVal && pressed && renderSwipePreview(DISPLAY_LABELS[swipeSubVal] || swipeSubVal, swipeSubVal.length > 1)}
       {sliding && renderSwipePreview(<MoveHorizontal size={20} strokeWidth={2} />)}
     </div>
