@@ -1224,7 +1224,7 @@ func (h *GitHandler) ConflictDetails(c *gin.Context) {
 	}
 	absPath := filepath.Join(repoRoot, req.FilePath)
 
-	contentBytes, err := exec.Command("cat", absPath).Output()
+	contentBytes, err := os.ReadFile(absPath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "cannot read file"})
 		return
@@ -1366,10 +1366,8 @@ func (h *GitHandler) ConflictResolve(c *gin.Context) {
 		return
 	}
 
-	writeCmd := exec.Command("tee", absPath)
-	writeCmd.Stdin = strings.NewReader(resolvedContent)
-	if out, err := writeCmd.CombinedOutput(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gitCommandError(err, out).Error()})
+	if err := os.WriteFile(absPath, []byte(resolvedContent), 0644); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
