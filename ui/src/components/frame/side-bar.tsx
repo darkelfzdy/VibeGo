@@ -4,14 +4,19 @@ import {
   FolderOpen,
   GitGraph,
   Home,
-  Menu,
   Maximize,
+  Menu,
   Minimize,
   Plus,
   Settings,
   Terminal,
 } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
+import WorkspaceHintBubble, {
+  getWorkspaceGroupTitle,
+  getWorkspacePath,
+  useWorkspaceHint,
+} from "@/components/frame/workspace-hint-bubble";
 import { useTranslation } from "@/lib/i18n";
 import { pageRegistry } from "@/pages/registry";
 import { useAppStore } from "@/stores/app-store";
@@ -49,8 +54,8 @@ interface GroupButtonProps {
   hasMultipleGroups: boolean;
   getTitle: (group: PageGroup) => string;
   getPageTitle: (pageType: PageType) => string;
-  onGroupClick: (groupId: string) => void;
-  onPageClick: (groupId: string, pageId: string) => void;
+  onGroupClick: (group: PageGroup, target: HTMLElement) => void;
+  onPageClick: (group: GenericGroup, pageId: string, target: HTMLElement) => void;
 }
 
 const getToolIcon = (pageId: string): React.ReactNode => {
@@ -74,6 +79,8 @@ const GroupButton: React.FC<GroupButtonProps> = ({
 }) => {
   if (group.type === "group") {
     const genericGroup = group as GenericGroup;
+    const workspacePath = getWorkspacePath(genericGroup);
+    const groupTitle = getWorkspaceGroupTitle(genericGroup);
     if (isExpanded) {
       return (
         <div
@@ -84,13 +91,13 @@ const GroupButton: React.FC<GroupButtonProps> = ({
           {genericGroup.pages.map((page) => (
             <button
               key={page.id}
-              onClick={() => onPageClick(group.id, page.id)}
+              onClick={(event) => onPageClick(genericGroup, page.id, event.currentTarget)}
               className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
                 isActive && genericGroup.activePageId === page.id
                   ? "text-ide-accent bg-ide-panel"
                   : "text-ide-mute hover:text-ide-text hover:bg-ide-panel/50"
               }`}
-              title={getPageTitle(page.type)}
+              title={workspacePath ? `${getPageTitle(page.type)} - ${workspacePath}` : getPageTitle(page.type)}
             >
               {PAGE_TYPE_ICONS[page.type] || <Box size={24} />}
             </button>
@@ -100,13 +107,13 @@ const GroupButton: React.FC<GroupButtonProps> = ({
     }
     return (
       <button
-        onClick={() => onGroupClick(group.id)}
+        onClick={(event) => onGroupClick(group, event.currentTarget)}
         className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
           isActive
             ? "bg-ide-panel text-ide-accent shadow-sm"
             : "text-ide-mute hover:text-ide-text hover:bg-ide-panel/50"
         }`}
-        title={getTitle(group)}
+        title={groupTitle}
       >
         {GROUP_TYPE_ICONS.group}
       </button>
@@ -117,7 +124,7 @@ const GroupButton: React.FC<GroupButtonProps> = ({
     const toolGroup = group as ToolGroup;
     return (
       <button
-        onClick={() => onGroupClick(group.id)}
+        onClick={(event) => onGroupClick(group, event.currentTarget)}
         className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
           isActive
             ? "bg-ide-panel text-ide-accent shadow-sm"
@@ -132,7 +139,7 @@ const GroupButton: React.FC<GroupButtonProps> = ({
 
   return (
     <button
-      onClick={() => onGroupClick(group.id)}
+      onClick={(event) => onGroupClick(group, event.currentTarget)}
       className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
         isActive ? "bg-ide-panel text-ide-accent shadow-sm" : "text-ide-mute hover:text-ide-text hover:bg-ide-panel/50"
       }`}
@@ -152,6 +159,7 @@ const SideBar: React.FC<SideBarProps> = ({ onMenuClick, onNewPage }) => {
   const setActiveGroup = useFrameStore((s) => s.setActiveGroup);
   const setActivePage = useFrameStore((s) => s.setActivePage);
   const setCurrentActiveTab = useFrameStore((s) => s.setCurrentActiveTab);
+  const { hint: workspaceHint, showWorkspaceHint } = useWorkspaceHint("right");
 
   const [compactMode] = useState(false);
 
@@ -160,21 +168,25 @@ const SideBar: React.FC<SideBarProps> = ({ onMenuClick, onNewPage }) => {
     "w-12 h-12 rounded-xl text-ide-mute hover:bg-ide-panel hover:text-ide-text flex items-center justify-center transition-colors";
 
   const handleGroupClick = useCallback(
-    (groupId: string) => {
-      if (activeGroupId === groupId) {
+    (group: PageGroup, target: HTMLElement) => {
+      if (group.type === "group") {
+        showWorkspaceHint(group, target);
+      }
+      if (activeGroupId === group.id) {
         setCurrentActiveTab(null);
       }
-      setActiveGroup(groupId);
+      setActiveGroup(group.id);
     },
-    [activeGroupId, setActiveGroup, setCurrentActiveTab]
+    [activeGroupId, setActiveGroup, setCurrentActiveTab, showWorkspaceHint]
   );
 
   const handlePageClick = useCallback(
-    (groupId: string, pageId: string) => {
-      setActiveGroup(groupId);
-      setActivePage(groupId, pageId);
+    (group: GenericGroup, pageId: string, target: HTMLElement) => {
+      showWorkspaceHint(group, target);
+      setActiveGroup(group.id);
+      setActivePage(group.id, pageId);
     },
-    [setActiveGroup, setActivePage]
+    [setActiveGroup, setActivePage, showWorkspaceHint]
   );
 
   const shouldExpand = (group: PageGroup) => {
@@ -253,77 +265,80 @@ const SideBar: React.FC<SideBarProps> = ({ onMenuClick, onNewPage }) => {
   const hasMultipleGroups = groups.length > 1;
 
   return (
-    <aside className="hidden md:flex w-16 h-full flex-col items-center py-4 bg-ide-panel border-r border-ide-border z-20 shadow-[5px_0_15px_rgba(0,0,0,0.1)] gap-4">
-      <button onClick={onMenuClick} className={actionButtonClass} title={t("common.menu") || "Menu"}>
-        <Menu size={24} />
-      </button>
+    <>
+      <aside className="hidden md:flex w-16 h-full flex-col items-center py-4 bg-ide-panel border-r border-ide-border z-20 shadow-[5px_0_15px_rgba(0,0,0,0.1)] gap-4">
+        <button onClick={onMenuClick} className={actionButtonClass} title={t("common.menu") || "Menu"}>
+          <Menu size={24} />
+        </button>
 
-      <div className="w-10 h-px bg-ide-border/50 shrink-0" />
+        <div className="w-10 h-px bg-ide-border/50 shrink-0" />
 
-      <div className="flex-1 flex flex-col gap-2 overflow-y-auto no-scrollbar w-full px-2 items-center">
-        {useCustomItems
-          ? bottomBarConfig.customItems!.map((item) => (
-              <button
-                key={item.id}
-                onClick={item.onClick}
-                className={`w-12 h-12 rounded-xl flex items-center justify-center relative transition-all ${
-                  bottomBarConfig.activeItemId === item.id
-                    ? "bg-ide-panel text-ide-accent shadow-sm border border-ide-border/50"
-                    : "text-ide-mute hover:text-ide-text hover:bg-ide-panel/50"
-                }`}
-                title={item.label}
-              >
-                {item.icon}
-                {item.badge && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full px-1 min-w-[16px] h-4 flex items-center justify-center">
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            ))
-          : groups.map((group) => (
-              <GroupButton
-                key={group.id}
-                group={group}
-                isActive={activeGroupId === group.id}
-                isExpanded={shouldExpand(group)}
-                hasMultipleGroups={hasMultipleGroups}
-                getTitle={getGroupTitle}
-                getPageTitle={getPageTitle}
-                onGroupClick={handleGroupClick}
-                onPageClick={handlePageClick}
-              />
-            ))}
+        <div className="flex-1 flex flex-col gap-2 overflow-y-auto no-scrollbar w-full px-2 items-center">
+          {useCustomItems
+            ? bottomBarConfig.customItems!.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={item.onClick}
+                  className={`w-12 h-12 rounded-xl flex items-center justify-center relative transition-all ${
+                    bottomBarConfig.activeItemId === item.id
+                      ? "bg-ide-panel text-ide-accent shadow-sm border border-ide-border/50"
+                      : "text-ide-mute hover:text-ide-text hover:bg-ide-panel/50"
+                  }`}
+                  title={item.label}
+                >
+                  {item.icon}
+                  {item.badge && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full px-1 min-w-[16px] h-4 flex items-center justify-center">
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              ))
+            : groups.map((group) => (
+                <GroupButton
+                  key={group.id}
+                  group={group}
+                  isActive={activeGroupId === group.id}
+                  isExpanded={shouldExpand(group)}
+                  hasMultipleGroups={hasMultipleGroups}
+                  getTitle={getGroupTitle}
+                  getPageTitle={getPageTitle}
+                  onGroupClick={handleGroupClick}
+                  onPageClick={handlePageClick}
+                />
+              ))}
 
-        {onNewPage && !useCustomItems && (
-          <button
-            onClick={onNewPage}
-            className="w-12 h-12 rounded-xl flex items-center justify-center text-ide-mute hover:text-ide-accent hover:bg-ide-panel/50 transition-all mt-2"
-            title={t("common.newPage")}
-          >
-            <Plus size={24} />
-          </button>
-        )}
-      </div>
+          {onNewPage && !useCustomItems && (
+            <button
+              onClick={onNewPage}
+              className="w-12 h-12 rounded-xl flex items-center justify-center text-ide-mute hover:text-ide-accent hover:bg-ide-panel/50 transition-all mt-2"
+              title={t("common.newPage")}
+            >
+              <Plus size={24} />
+            </button>
+          )}
+        </div>
 
-      <div className="w-10 h-px bg-ide-border/50 shrink-0" />
+        <div className="w-10 h-px bg-ide-border/50 shrink-0" />
 
-      <div className="flex flex-col gap-2 px-2 items-center">
-        {rightButtons.map((button, index) => (
-          <button
-            key={index}
-            onClick={button.onClick}
-            disabled={button.disabled}
-            title={button.label}
-            className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-              button.active ? "bg-ide-accent text-ide-bg" : "text-ide-mute hover:bg-ide-panel hover:text-ide-text"
-            } ${button.disabled ? "opacity-50 cursor-not-allowed" : ""}`}
-          >
-            {button.icon}
-          </button>
-        ))}
-      </div>
-    </aside>
+        <div className="flex flex-col gap-2 px-2 items-center">
+          {rightButtons.map((button, index) => (
+            <button
+              key={index}
+              onClick={button.onClick}
+              disabled={button.disabled}
+              title={button.label}
+              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+                button.active ? "bg-ide-accent text-ide-bg" : "text-ide-mute hover:bg-ide-panel hover:text-ide-text"
+              } ${button.disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+              {button.icon}
+            </button>
+          ))}
+        </div>
+      </aside>
+      <WorkspaceHintBubble hint={workspaceHint} />
+    </>
   );
 };
 

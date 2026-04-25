@@ -12,6 +12,11 @@ import {
   Terminal,
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import WorkspaceHintBubble, {
+  getWorkspaceGroupTitle,
+  getWorkspacePath,
+  useWorkspaceHint,
+} from "@/components/frame/workspace-hint-bubble";
 import { useTranslation } from "@/lib/i18n";
 import { pageRegistry } from "@/pages/registry";
 import { useAppStore } from "@/stores/app-store";
@@ -49,8 +54,8 @@ interface GroupButtonProps {
   hasMultipleGroups: boolean;
   getTitle: (group: PageGroup) => string;
   getPageTitle: (pageType: PageType) => string;
-  onGroupClick: (groupId: string) => void;
-  onPageClick: (groupId: string, pageId: string) => void;
+  onGroupClick: (group: PageGroup, target: HTMLElement) => void;
+  onPageClick: (group: GenericGroup, pageId: string, target: HTMLElement) => void;
 }
 
 const getToolIcon = (pageId: string): React.ReactNode => {
@@ -74,6 +79,8 @@ const GroupButton: React.FC<GroupButtonProps> = ({
 }) => {
   if (group.type === "group") {
     const genericGroup = group as GenericGroup;
+    const workspacePath = getWorkspacePath(genericGroup);
+    const groupTitle = getWorkspaceGroupTitle(genericGroup);
     if (isExpanded) {
       return (
         <div
@@ -84,13 +91,13 @@ const GroupButton: React.FC<GroupButtonProps> = ({
           {genericGroup.pages.map((page) => (
             <button
               key={page.id}
-              onClick={() => onPageClick(group.id, page.id)}
+              onClick={(event) => onPageClick(genericGroup, page.id, event.currentTarget)}
               className={`px-2 h-full rounded flex items-center transition-all ${
                 isActive && genericGroup.activePageId === page.id
                   ? "text-ide-accent"
                   : "text-ide-mute hover:text-ide-text"
               }`}
-              title={getPageTitle(page.type)}
+              title={workspacePath ? `${getPageTitle(page.type)} - ${workspacePath}` : getPageTitle(page.type)}
             >
               {PAGE_TYPE_ICONS[page.type] || <Box size={18} />}
             </button>
@@ -100,11 +107,11 @@ const GroupButton: React.FC<GroupButtonProps> = ({
     }
     return (
       <button
-        onClick={() => onGroupClick(group.id)}
+        onClick={(event) => onGroupClick(group, event.currentTarget)}
         className={`px-3 h-full rounded flex items-center gap-2 transition-all ${
           isActive ? "bg-ide-panel text-ide-accent shadow-sm" : "text-ide-mute hover:text-ide-text"
         }`}
-        title={getTitle(group)}
+        title={groupTitle}
       >
         {GROUP_TYPE_ICONS.group}
       </button>
@@ -115,7 +122,7 @@ const GroupButton: React.FC<GroupButtonProps> = ({
     const toolGroup = group as ToolGroup;
     return (
       <button
-        onClick={() => onGroupClick(group.id)}
+        onClick={(event) => onGroupClick(group, event.currentTarget)}
         className={`px-3 h-full rounded flex items-center gap-2 transition-all ${
           isActive ? "bg-ide-panel text-ide-accent shadow-sm" : "text-ide-mute hover:text-ide-text"
         }`}
@@ -128,7 +135,7 @@ const GroupButton: React.FC<GroupButtonProps> = ({
 
   return (
     <button
-      onClick={() => onGroupClick(group.id)}
+      onClick={(event) => onGroupClick(group, event.currentTarget)}
       className={`px-3 h-full rounded flex items-center gap-2 transition-all ${
         isActive ? "bg-ide-panel text-ide-accent shadow-sm" : "text-ide-mute hover:text-ide-text"
       }`}
@@ -148,6 +155,7 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick, onNewPage }) => {
   const setActiveGroup = useFrameStore((s) => s.setActiveGroup);
   const setActivePage = useFrameStore((s) => s.setActivePage);
   const setCurrentActiveTab = useFrameStore((s) => s.setCurrentActiveTab);
+  const { hint: workspaceHint, showWorkspaceHint } = useWorkspaceHint("top");
 
   const [compactMode] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -157,26 +165,31 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick, onNewPage }) => {
     "shrink-0 w-8 h-8 rounded-md text-ide-accent hover:bg-ide-accent hover:text-ide-bg flex items-center justify-center border border-ide-border transition-colors";
 
   const handleGroupClick = useCallback(
-    (groupId: string) => {
+    (group: PageGroup, target: HTMLElement) => {
       const now = Date.now();
-      const lastClick = lastClickTime.current[groupId] || 0;
+      const lastClick = lastClickTime.current[group.id] || 0;
 
-      if (now - lastClick < 300 && activeGroupId === groupId) {
+      if (group.type === "group") {
+        showWorkspaceHint(group, target);
+      }
+
+      if (now - lastClick < 300 && activeGroupId === group.id) {
         setCurrentActiveTab(null);
       }
 
-      lastClickTime.current[groupId] = now;
-      setActiveGroup(groupId);
+      lastClickTime.current[group.id] = now;
+      setActiveGroup(group.id);
     },
-    [activeGroupId, setActiveGroup, setCurrentActiveTab]
+    [activeGroupId, setActiveGroup, setCurrentActiveTab, showWorkspaceHint]
   );
 
   const handlePageClick = useCallback(
-    (groupId: string, pageId: string) => {
-      setActiveGroup(groupId);
-      setActivePage(groupId, pageId);
+    (group: GenericGroup, pageId: string, target: HTMLElement) => {
+      showWorkspaceHint(group, target);
+      setActiveGroup(group.id);
+      setActivePage(group.id, pageId);
     },
-    [setActiveGroup, setActivePage]
+    [setActiveGroup, setActivePage, showWorkspaceHint]
   );
 
   const shouldExpand = (group: PageGroup) => {
@@ -338,6 +351,7 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick, onNewPage }) => {
           ))}
         </div>
       </footer>
+      <WorkspaceHintBubble hint={workspaceHint} />
     </>
   );
 };
