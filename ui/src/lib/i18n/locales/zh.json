@@ -237,6 +237,7 @@
       "fileManager": "文件管理器",
       "editor": "编辑器",
       "terminal": "终端",
+      "notification": "通知",
       "keyboard": "键盘",
       "git": "Git"
     },
@@ -289,6 +290,13 @@
     "terminalDesktopNotifications": {
       "label": "桌面通知",
       "description": "当网页在后台且终端不是活动终端时，优先使用浏览器系统通知"
+    },
+    "notificationTest": {
+      "label": "测试通知",
+      "description": "发送一条应用内通知，用来检查当前位置、样式和滑动关闭。",
+      "button": "发送测试通知",
+      "toastTitle": "测试通知",
+      "toastDescription": "这是一条用于验证通知样式和交互的测试消息。"
     },
     "gitUserName": {
       "label": "Git 用户名",

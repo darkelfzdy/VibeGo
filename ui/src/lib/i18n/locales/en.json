@@ -228,6 +228,7 @@
       "fileManager": "File Manager",
       "editor": "Editor",
       "terminal": "Terminal",
+      "notification": "Notifications",
       "keyboard": "Keyboard",
       "git": "Git"
     },
@@ -280,6 +281,13 @@
     "terminalDesktopNotifications": {
       "label": "Desktop Notifications",
       "description": "Prefer browser notifications when the page is in the background and the terminal is not active"
+    },
+    "notificationTest": {
+      "label": "Test Notification",
+      "description": "Send an in-app notification to verify position, style, and swipe dismiss.",
+      "button": "Send Test Notification",
+      "toastTitle": "Test Notification",
+      "toastDescription": "This message is used to verify notification style and interaction."
     },
     "gitUserName": {
       "label": "Git User Name",

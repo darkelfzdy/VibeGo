@@ -276,6 +276,12 @@ const SettingsPage: React.FC = () => {
     void updateSetting(key, value);
   };
 
+  const handleTestNotification = () => {
+    toast.info(t("settings.notificationTest.toastTitle"), {
+      description: t("settings.notificationTest.toastDescription"),
+    });
+  };
+
   useEffect(() => {
     void initSettings();
   }, [initSettings]);
@@ -337,25 +343,50 @@ const SettingsPage: React.FC = () => {
   }
 
   const categorySettings = getSettingsByCategory(activeTab).filter((schema) => schema.key !== "speechAssetSource");
+  const renderNotificationTab = () => (
+    <div className="p-4 bg-ide-bg rounded-lg border border-ide-border">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="text-ide-mute">
+          <Bell size={18} />
+        </div>
+        <div>
+          <div className="text-sm font-medium text-ide-text">{t("settings.notificationTest.label")}</div>
+          <div className="text-xs text-ide-mute">{t("settings.notificationTest.description")}</div>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={handleTestNotification}
+        className="inline-flex items-center gap-2 px-3 py-1.5 text-xs border rounded-md transition-all bg-ide-panel text-ide-text border-ide-border hover:border-ide-accent"
+      >
+        <Bell size={14} />
+        {t("settings.notificationTest.button")}
+      </button>
+    </div>
+  );
 
   return (
     <div className="h-full overflow-y-auto bg-ide-bg">
       <div className="max-w-2xl mx-auto p-4">
         <div className="space-y-2">
-          {categorySettings.map((schema) => (
-            <SettingItem
-              key={schema.key}
-              schema={schema}
-              value={settings[schema.key] || schema.defaultValue}
-              onChange={(v) => void handleSettingChange(schema.key, v)}
-              t={t}
-              sourceValue={settings.speechAssetSource || "auto"}
-              sourceOptions={schema.key === "speechAssets" ? speechSourceOptions : undefined}
-              onSourceChange={
-                schema.key === "speechAssets" ? (v) => void handleSettingChange("speechAssetSource", v) : undefined
-              }
-            />
-          ))}
+          {activeTab === "notification"
+            ? renderNotificationTab()
+            : categorySettings.map((schema) => (
+                <SettingItem
+                  key={schema.key}
+                  schema={schema}
+                  value={settings[schema.key] || schema.defaultValue}
+                  onChange={(v) => void handleSettingChange(schema.key, v)}
+                  t={t}
+                  sourceValue={settings.speechAssetSource || "auto"}
+                  sourceOptions={schema.key === "speechAssets" ? speechSourceOptions : undefined}
+                  onSourceChange={
+                    schema.key === "speechAssets"
+                      ? (v) => void handleSettingChange("speechAssetSource", v)
+                      : undefined
+                  }
+                />
+              ))}
         </div>
       </div>
     </div>
