@@ -59,14 +59,18 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
-      - uses: astral-sh/setup-uv@v5
+      - run: npm i -g npm@11
+
+      - uses: astral-sh/setup-uv@v8
+        with:
+          enable-cache: false
 
       - name: Download backend artifacts from release
         env:
@@ -150,7 +154,7 @@ jobs:
           - windows-latest
 
     steps:
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
 
