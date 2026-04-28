@@ -1,3 +1,4 @@
+import { ArrowUp, AudioLines, Mic, MoreVertical, Undo2 } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { keyFeedback } from "@/components/keyboard/core/key-feedback";
@@ -11,6 +12,7 @@ import {
 } from "@/components/keyboard/core/sherpa-asr";
 import type { KeyEvent, LayoutDef, ModifiersState } from "@/components/keyboard/core/types";
 import { MODIFIER_KEYS } from "@/components/keyboard/core/types";
+import type { VoiceReleaseTarget } from "@/components/keyboard/key-button";
 import KeyButton from "@/components/keyboard/key-button";
 import { getTranslation } from "@/lib/i18n";
 import { useSettingsStore } from "@/lib/settings";
@@ -38,6 +40,7 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
 
   const [asrStatus, setAsrStatus] = useState<SherpaStatus>("idle");
   const [asrProgress, setAsrProgress] = useState("");
+  const [voiceTarget, setVoiceTarget] = useState<VoiceReleaseTarget>("commit");
   const recordingRef = useRef(false);
   const startingRecordingRef = useRef(false);
   const pendingRecordingActionRef = useRef<"commit" | "cancel" | null>(null);
@@ -128,9 +131,15 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
   }, [finishMicInput, openKeyboardSpeechSettings]);
 
   const handleMicToggle = useCallback(
-    async (action?: "start" | "stop" | "cancel") => {
+    async (action?: "start" | "stop" | "cancel" | "continue") => {
       if (action === "start") {
+        setVoiceTarget("commit");
         await startMicInput();
+        return;
+      }
+
+      if (action === "continue") {
+        setVoiceTarget("continue");
         return;
       }
 
@@ -177,7 +186,7 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
   }, []);
 
   const handleKeyOutput = useCallback(
-    (value: string, special: boolean, action?: "start" | "stop" | "cancel") => {
+    (value: string, special: boolean, action?: "start" | "stop" | "cancel" | "continue") => {
       keyFeedback(value, special ? "modifier" : "char");
       if (MODIFIER_KEYS.has(value)) {
         const name = modName(value);
@@ -268,10 +277,12 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
   }, [layout]);
 
   const showLoadingBar = asrStatus === "loading" || asrStatus === "error";
+  const showVoicePanel = asrStatus === "recording" || asrStatus === "recognizing";
 
   return (
     <div
-      className={`tk-keyboard${asrStatus === "recording" ? " tk-keyboard--recording" : ""}`}
+      className={`tk-keyboard${showVoicePanel ? " tk-keyboard--recording" : ""}`}
+      data-voice-target={voiceTarget}
       onPointerDown={(e) => e.preventDefault()}
       onMouseDown={(e) => e.preventDefault()}
       onContextMenu={(e) => e.preventDefault()}
@@ -280,6 +291,34 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
         <div className="tk-speech-indicator">
           <span className="tk-speech-dot" />
           <span className="tk-speech-text">{asrProgress}</span>
+        </div>
+      )}
+      {showVoicePanel && (
+        <div className="tk-voice-overlay">
+          <div className="tk-voice-status">
+            {asrStatus === "recognizing"
+              ? "语音转文字中..."
+              : voiceTarget === "cancel"
+                ? "松手取消"
+                : voiceTarget === "commit"
+                  ? "松手发送"
+                  : "松手继续识别"}
+          </div>
+          <div className="tk-voice-mic">
+            <Mic size={20} strokeWidth={2.4} />
+          </div>
+          <div className="tk-voice-actions">
+            <div className="tk-voice-action tk-voice-action--cancel">
+              <Undo2 size={24} strokeWidth={2.3} />
+            </div>
+            <div className="tk-voice-action tk-voice-action--continue">
+              <AudioLines size={26} strokeWidth={2.2} />
+            </div>
+            <div className="tk-voice-action tk-voice-action--commit">
+              <ArrowUp size={26} strokeWidth={2.3} />
+              <MoreVertical size={12} strokeWidth={3} />
+            </div>
+          </div>
         </div>
       )}
       {layout.rows.map((row, ri) => (
@@ -303,6 +342,9 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
                 shiftActive={shiftActive}
                 onKeyOutput={handleKeyOutput}
                 onSlide={handleSlide}
+                onVoiceTargetChange={(target) => {
+                  if (target) setVoiceTarget(target);
+                }}
                 edge={edge}
               />
             );

@@ -151,10 +151,13 @@
 .tk-sub--se { grid-area: 3 / 3; align-self: end; justify-self: end; padding: 0 2px 1px 0; }
 
 .tk-sub-button {
+  position: absolute;
+  top: 1px;
+  right: 2px;
   z-index: 20;
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
+  justify-content: flex-end;
   width: 24px;
   height: 20px;
   padding: 0;
@@ -261,52 +264,6 @@
   height: 18px;
 }
 
-.tk-voice-picker {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 70;
-  display: grid;
-  grid-template-columns: 44px 48px 44px;
-  align-items: center;
-  gap: 8px;
-  padding: 6px;
-  border-radius: 8px;
-  background: var(--tk-key-bg);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
-  pointer-events: none;
-}
-
-.tk-voice-choice,
-.tk-voice-live {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 38px;
-  border-radius: 6px;
-  color: var(--tk-text);
-}
-
-.tk-voice-choice {
-  background: color-mix(in srgb, var(--ide-border) 65%, transparent);
-}
-
-.tk-voice-live {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.1);
-}
-
-.tk-voice-picker[data-target="cancel"] .tk-voice-choice--cancel {
-  color: #ffffff;
-  background: #ef4444;
-}
-
-.tk-voice-picker[data-target="commit"] .tk-voice-choice--commit {
-  color: var(--tk-mod-latched-text);
-  background: var(--tk-mod-latched-bg);
-}
-
 .tk-row--short {
   height: calc(var(--tk-row-height) * 0.85);
 }
@@ -352,4 +309,97 @@
 .tk-keyboard--recording .tk-key .tk-label,
 .tk-keyboard--recording .tk-key .tk-sub {
   opacity: 0;
+}
+
+.tk-keyboard--recording {
+  position: relative;
+}
+
+.tk-keyboard--recording .tk-row {
+  opacity: 0.22;
+}
+
+.tk-keyboard--recording .tk-key {
+  background: color-mix(in srgb, var(--tk-key-bg) 72%, var(--tk-bg));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.tk-voice-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  grid-template-rows: 40px 1fr;
+  align-items: center;
+  pointer-events: none;
+  color: var(--tk-text);
+}
+
+.tk-voice-status {
+  grid-row: 1;
+  justify-self: center;
+  align-self: start;
+  padding-top: 2px;
+  color: var(--ide-mute);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.tk-voice-mic {
+  position: absolute;
+  top: 7px;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--ide-border);
+  border-radius: var(--tk-key-radius);
+  color: var(--ide-on-accent);
+  background: var(--ide-accent);
+  box-shadow: var(--tk-key-shadow);
+}
+
+.tk-voice-actions {
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: var(--tk-gap-x);
+  padding: 4px var(--tk-side-pad) 12px;
+}
+
+.tk-voice-action {
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 138px;
+  height: 58px;
+  border: 1px solid var(--ide-border);
+  border-radius: var(--tk-key-radius);
+  color: var(--tk-text);
+  background: var(--tk-key-bg);
+  box-shadow: var(--tk-key-shadow);
+  transition: color 0.1s, background 0.1s, border-color 0.1s;
+}
+
+.tk-voice-action--commit {
+  flex-direction: column;
+  gap: 0;
+}
+
+.tk-voice-action--commit svg:last-child {
+  opacity: 0.8;
+}
+
+.tk-keyboard[data-voice-target="cancel"] .tk-voice-action--cancel,
+.tk-keyboard[data-voice-target="continue"] .tk-voice-action--continue,
+.tk-keyboard[data-voice-target="commit"] .tk-voice-action--commit {
+  color: #ffffff;
+  background: var(--ide-accent);
+  border-color: var(--ide-accent);
 }
