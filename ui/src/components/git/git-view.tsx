@@ -1,14 +1,35 @@
-import { ArrowDown, ArrowUp, CloudUpload, FileText, FolderGit2, GitBranch, GitGraph, History, Loader2, RefreshCw } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  CloudUpload,
+  FileText,
+  FolderGit2,
+  GitBranch,
+  GitGraph,
+  History,
+  Loader2,
+  RefreshCw,
+} from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { GitCommit } from "@/api/git";
+import { useShallow } from "zustand/react/shallow";
+import type {
+  BranchStatusInfo,
+  GitBranchesSnapshot,
+  GitCommit,
+  GitDraft,
+  GitWSSnapshot,
+  RemoteInfo,
+  StashEntry,
+} from "@/api/git";
 import { gitApi } from "@/api/git";
 import { useDialog } from "@/components/common";
+import BranchSelector from "@/components/git/branch-selector";
+import GitChangesView from "@/components/git/git-changes-view";
+import GitHistoryView from "@/components/git/git-history-view";
 import { usePageTopBar } from "@/hooks/use-page-top-bar";
 import { getTranslation, type Locale } from "@/lib/i18n";
-import { useGitStore } from "@/stores";
-import BranchSelector from "./branch-selector";
-import GitChangesView from "./git-changes-view";
-import GitHistoryView from "./git-history-view";
+import { getOrCreateGitStore, useGitStore } from "@/stores";
+import { useSessionStore } from "@/stores/session-store";
 
 interface GitDiffRequest {
   original: string;
@@ -33,12 +54,11 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
   const t = (key: string) => getTranslation(locale, key);
   const dialog = useDialog();
   const [showBranchSelector, setShowBranchSelector] = useState(false);
+  const currentSessionId = useSessionStore((s) => s.currentSessionId);
   const {
     currentPath: currentRepoPath,
     isRepo,
     allFiles,
-    checkedFiles,
-    partialSelections,
     commits,
     isLoading,
     selectedCommit,
@@ -55,18 +75,14 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
     conflicts,
     error,
     setCurrentPath,
+    setScope,
     setActiveTab,
     reset,
     checkRepo,
     initRepo,
-    fetchStatus,
     fetchLog,
     fetchMoreLog,
-    fetchBranches,
-    fetchRemotes,
-    fetchBranchStatus,
-    fetchStashes,
-    fetchConflicts,
+    syncRepo,
     smartSwitchBranch,
     gitPull,
     gitPush,
@@ -76,7 +92,6 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
     stashDrop,
     createBranch,
     deleteBranch,
-    getDiff,
     setSelectedCommit,
     getCommitFiles,
     getCommitDiff,
@@ -86,66 +101,239 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
     undoLastCommit,
     applyStatusUpdate,
     applyBranchStatus,
-  } = useGitStore(groupId);
+    applyBranchesSnapshot,
+    applyRemotes,
+    applyStashes,
+    applyConflicts,
+    applyDraft,
+    applySnapshot,
+  } = useGitStore(
+    groupId,
+    useShallow((state) => ({
+      currentPath: state.currentPath,
+      isRepo: state.isRepo,
+      allFiles: state.allFiles,
+      commits: state.commits,
+      isLoading: state.isLoading,
+      selectedCommit: state.selectedCommit,
+      selectedCommitFiles: state.selectedCommitFiles,
+      currentBranch: state.currentBranch,
+      branches: state.branches,
+      remoteBranches: state.remoteBranches,
+      activeTab: state.activeTab,
+      hasRemote: state.hasRemote,
+      remoteUrls: state.remoteUrls,
+      aheadCount: state.aheadCount,
+      behindCount: state.behindCount,
+      stashes: state.stashes,
+      conflicts: state.conflicts,
+      error: state.error,
+      setCurrentPath: state.setCurrentPath,
+      setScope: state.setScope,
+      setActiveTab: state.setActiveTab,
+      reset: state.reset,
+      checkRepo: state.checkRepo,
+      initRepo: state.initRepo,
+      fetchLog: state.fetchLog,
+      fetchMoreLog: state.fetchMoreLog,
+      syncRepo: state.syncRepo,
+      smartSwitchBranch: state.smartSwitchBranch,
+      gitPull: state.gitPull,
+      gitPush: state.gitPush,
+      gitFetch: state.gitFetch,
+      stash: state.stash,
+      stashPop: state.stashPop,
+      stashDrop: state.stashDrop,
+      createBranch: state.createBranch,
+      deleteBranch: state.deleteBranch,
+      setSelectedCommit: state.setSelectedCommit,
+      getCommitFiles: state.getCommitFiles,
+      getCommitDiff: state.getCommitDiff,
+      toggleFile: state.toggleFile,
+      toggleAllFiles: state.toggleAllFiles,
+      discardFile: state.discardFile,
+      undoLastCommit: state.undoLastCommit,
+      applyStatusUpdate: state.applyStatusUpdate,
+      applyBranchStatus: state.applyBranchStatus,
+      applyBranchesSnapshot: state.applyBranchesSnapshot,
+      applyRemotes: state.applyRemotes,
+      applyStashes: state.applyStashes,
+      applyConflicts: state.applyConflicts,
+      applyDraft: state.applyDraft,
+      applySnapshot: state.applySnapshot,
+    }))
+  );
 
-  const initializedRef = useRef(false);
   const wsCleanupRef = useRef<(() => void) | null>(null);
+  const historySyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const historyDirtyRef = useRef(true);
 
-  const fetchAllGitData = useCallback(() => {
-    fetchStatus();
-    fetchLog();
-    fetchBranches();
-    fetchRemotes();
-    fetchBranchStatus();
-    fetchStashes();
-    fetchConflicts();
-  }, [fetchStatus, fetchLog, fetchBranches, fetchRemotes, fetchBranchStatus, fetchStashes, fetchConflicts]);
+  const scheduleHistoryRefresh = useCallback(
+    (delay = 0) => {
+      historyDirtyRef.current = true;
+      if (!isActive || isRepo !== true || activeTab !== "history") {
+        return;
+      }
+      if (historySyncTimerRef.current) {
+        return;
+      }
+      historySyncTimerRef.current = setTimeout(() => {
+        historySyncTimerRef.current = null;
+        historyDirtyRef.current = false;
+        void fetchLog();
+      }, delay);
+    },
+    [activeTab, fetchLog, isActive, isRepo]
+  );
 
   useEffect(() => {
-    const pathChanged = currentRepoPath !== path;
-    if (pathChanged) {
+    if (currentRepoPath !== path) {
       reset();
       setCurrentPath(path);
-      initializedRef.current = false;
+      return;
     }
-    if (!initializedRef.current) {
-      initializedRef.current = true;
-      checkRepo().then((ok) => {
-        if (ok) fetchAllGitData();
-      });
+
+    if (isRepo !== null) {
+      return;
     }
-  }, [path, currentRepoPath, setCurrentPath, reset, checkRepo, fetchAllGitData]);
+
+    let cancelled = false;
+
+    void checkRepo().then((ok) => {
+      if (!ok || cancelled) {
+        return;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [path, currentRepoPath, isRepo, setCurrentPath, reset, checkRepo]);
+
+  useEffect(() => {
+    return () => {
+      if (historySyncTimerRef.current) {
+        clearTimeout(historySyncTimerRef.current);
+        historySyncTimerRef.current = null;
+      }
+      historyDirtyRef.current = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    setScope(currentSessionId);
+  }, [currentSessionId, setScope]);
 
   useEffect(() => {
     if (!path || !isActive || isRepo !== true) return;
-    wsCleanupRef.current = gitApi.connectWs(path, (event) => {
-      if (event.type === "file_changed" && event.data.files) {
-        applyStatusUpdate(event.data.files as any);
-      }
-      if (event.type === "remote_updated") {
-        applyBranchStatus(event.data as any);
-      }
-    });
+    wsCleanupRef.current = gitApi.connectWs(
+      path,
+      (event) => {
+        if (event.type === "snapshot") {
+          applySnapshot(event.data as GitWSSnapshot);
+          return;
+        }
+        if (event.type === "status_changed") {
+          const payload = event.data as { files?: unknown[] };
+          applyStatusUpdate((payload.files as any) || []);
+          return;
+        }
+        if (event.type === "branch_status_changed") {
+          applyBranchStatus(event.data as BranchStatusInfo);
+          return;
+        }
+        if (event.type === "branches_changed") {
+          applyBranchesSnapshot(event.data as GitBranchesSnapshot);
+          return;
+        }
+        if (event.type === "remotes_changed") {
+          const payload = event.data as { remotes?: RemoteInfo[] };
+          applyRemotes(payload.remotes ?? []);
+          return;
+        }
+        if (event.type === "stashes_changed") {
+          const payload = event.data as { stashes?: StashEntry[] };
+          applyStashes(payload.stashes ?? []);
+          return;
+        }
+        if (event.type === "conflicts_changed") {
+          const payload = event.data as { conflicts?: string[] };
+          applyConflicts(payload.conflicts ?? []);
+          return;
+        }
+        if (event.type === "draft_changed") {
+          applyDraft(event.data as GitDraft);
+          return;
+        }
+        if (event.type === "history_changed") {
+          scheduleHistoryRefresh(120);
+        }
+      },
+      { workspace_session_id: currentSessionId || undefined, group_id: groupId }
+    );
     return () => {
       wsCleanupRef.current?.();
       wsCleanupRef.current = null;
     };
-  }, [path, isActive, isRepo, applyStatusUpdate, applyBranchStatus]);
+  }, [
+    path,
+    isActive,
+    isRepo,
+    currentSessionId,
+    groupId,
+    applyStatusUpdate,
+    applyBranchStatus,
+    applyBranchesSnapshot,
+    applyRemotes,
+    applyStashes,
+    applyConflicts,
+    applyDraft,
+    applySnapshot,
+    scheduleHistoryRefresh,
+  ]);
+
+  useEffect(() => {
+    if (activeTab === "history" && isActive && isRepo === true && (commits.length === 0 || historyDirtyRef.current)) {
+      scheduleHistoryRefresh(0);
+    }
+  }, [activeTab, commits.length, isActive, isRepo, scheduleHistoryRefresh]);
 
   const handleRefresh = useCallback(() => {
-    fetchStatus();
-    fetchBranchStatus();
-    if (activeTab === "history") fetchLog();
-  }, [fetchStatus, fetchBranchStatus, fetchLog, activeTab]);
+    void syncRepo();
+  }, [syncRepo]);
+
+  const handleFetch = useCallback(async () => {
+    const ok = await gitFetch();
+    if (!ok) {
+      await dialog.alert(t("git.operationFailed"), getOrCreateGitStore(groupId).getState().error || undefined);
+    }
+  }, [dialog, gitFetch, groupId, t]);
+
+  const handlePull = useCallback(async () => {
+    const ok = await gitPull();
+    if (!ok) {
+      await dialog.alert(t("git.operationFailed"), getOrCreateGitStore(groupId).getState().error || undefined);
+    }
+  }, [dialog, gitPull, groupId, t]);
+
+  const handlePush = useCallback(
+    async (force?: boolean) => {
+      const ok = await gitPush(force);
+      if (!ok) {
+        await dialog.alert(t("git.operationFailed"), getOrCreateGitStore(groupId).getState().error || undefined);
+      }
+    },
+    [dialog, gitPush, groupId, t]
+  );
 
   const smartAction = useMemo(() => {
-    if (!hasRemote) return { label: t("git.publish"), icon: <CloudUpload size={14} />, action: gitPush };
+    if (!hasRemote) return { label: t("git.publish"), icon: <CloudUpload size={14} />, action: handlePush };
     if (behindCount > 0)
-      return { label: `${t("git.pull")} (${behindCount})`, icon: <ArrowDown size={14} />, action: gitPull };
+      return { label: `${t("git.pull")} (${behindCount})`, icon: <ArrowDown size={14} />, action: handlePull };
     if (aheadCount > 0)
-      return { label: `${t("git.push")} (${aheadCount})`, icon: <ArrowUp size={14} />, action: gitPush };
-    return { label: t("git.fetch"), icon: <RefreshCw size={14} />, action: gitFetch };
-  }, [hasRemote, aheadCount, behindCount, gitPull, gitPush, gitFetch, t]);
+      return { label: `${t("git.push")} (${aheadCount})`, icon: <ArrowUp size={14} />, action: handlePush };
+    return { label: t("git.fetch"), icon: <RefreshCw size={14} />, action: handleFetch };
+  }, [hasRemote, aheadCount, behindCount, handleFetch, handlePull, handlePush, t]);
 
   const topBarConfig = useMemo(() => {
     if (!isActive) return null;
@@ -208,28 +396,25 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
     if (!confirmed) return;
     const ok = await initRepo();
     if (ok) {
-      fetchAllGitData();
+      historyDirtyRef.current = true;
     }
-  }, [dialog, t, initRepo, fetchAllGitData]);
+  }, [dialog, t, initRepo]);
 
   const handleFileClick = useCallback(
     async (filePath: string) => {
-      const diff = await getDiff(filePath);
-      if (diff) {
-        const file = allFiles.find((item) => item.path === filePath);
-        const fileName = filePath.split("/").pop() || filePath;
-        onFileDiff({
-          original: diff.old,
-          modified: diff.new,
-          title: `${fileName} [DIFF]`,
-          filename: fileName,
-          filePath,
-          repoPath: path,
-          allowSelection: file ? ["modified", "added", "untracked"].includes(file.status) : false,
-        });
-      }
+      const file = allFiles.find((item) => item.path === filePath);
+      const fileName = filePath.split("/").pop() || filePath;
+      onFileDiff({
+        original: "",
+        modified: "",
+        title: `${fileName} [DIFF]`,
+        filename: fileName,
+        filePath,
+        repoPath: path,
+        allowSelection: file ? ["modified", "added", "untracked"].includes(file.status) : false,
+      });
     },
-    [allFiles, getDiff, onFileDiff, path]
+    [allFiles, onFileDiff, path]
   );
 
   const handleCommitSelect = useCallback(
@@ -352,10 +537,12 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
             )}
           </button>
           <div className="flex-1" />
-          {(hasRemote || aheadCount > 0) && (allFiles.length > 0 || conflicts.length > 0) && (
+          {(hasRemote || aheadCount > 0) && (
             <button
               className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-ide-accent hover:bg-ide-accent/10 active:bg-ide-accent/15 transition-colors disabled:opacity-50 shrink-0"
-              onClick={smartAction.action}
+              onClick={() => {
+                void smartAction.action();
+              }}
               disabled={isLoading}
             >
               {smartAction.icon}
@@ -369,8 +556,6 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
             <GitChangesView
               groupId={groupId}
               allFiles={allFiles}
-              checkedFiles={checkedFiles}
-              partialSelections={partialSelections}
               isLoading={isLoading}
               locale={locale}
               currentBranch={currentBranch}
@@ -387,9 +572,9 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
               onStash={stash}
               onStashPop={stashPop}
               onStashDrop={stashDrop}
-              onPull={gitPull}
-              onPush={gitPush}
-              onFetch={gitFetch}
+              onPull={handlePull}
+              onPush={handlePush}
+              onFetch={handleFetch}
               onUndoLastCommit={undoLastCommit}
             />
           ) : (
@@ -398,6 +583,7 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
               isLoading={isLoading}
               locale={locale}
               remoteUrls={remoteUrls}
+              aheadCount={aheadCount}
               onCommitSelect={handleCommitSelect}
               onUndoCommit={handleHistoryUndoCommit}
               onFileClick={handleHistoryFileClick}
@@ -426,4 +612,3 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
 };
 
 export default GitView;
-

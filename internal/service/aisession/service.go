@@ -2,7 +2,10 @@ package aisession
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/xxnuo/vibego/internal/model"
@@ -162,6 +165,56 @@ func (s *Service) GetMessages(providerID, sourcePath string) (MessagesResult, er
 	}, nil
 }
 
+func (s *Service) DeleteSession(providerID, sessionID, sourcePath string) error {
+	outcome := s.DeleteSessionOutcome(providerID, sessionID, sourcePath)
+	if outcome.Success {
+		return nil
+	}
+	return fmt.Errorf("%s", outcome.Error)
+}
+
+func (s *Service) DeleteSessionOutcome(providerID, sessionID, sourcePath string) DeleteOutcome {
+	outcome := DeleteOutcome{
+		ProviderID: providerID,
+		SessionID:  sessionID,
+		SourcePath: sourcePath,
+	}
+	item := providerByID(providerID)
+	if item == nil {
+		outcome.Error = fmt.Sprintf("unsupported provider: %s", providerID)
+		return outcome
+	}
+	cfg, err := s.GetConfig()
+	if err != nil {
+		outcome.Error = err.Error()
+		return outcome
+	}
+	providerCfg := cfg.Providers[providerID]
+	roots := normalizePaths(providerCfg.Paths)
+	if len(roots) == 0 {
+		roots = normalizePaths(item.DefaultRoots())
+	}
+	if len(roots) == 0 {
+		outcome.Error = "provider root not configured"
+		return outcome
+	}
+	validatedSource, root, err := validateSessionPath(roots, sourcePath)
+	if err != nil {
+		outcome.Error = err.Error()
+		return outcome
+	}
+	if err := item.Delete(root, validatedSource, sessionID); err != nil {
+		outcome.Error = err.Error()
+		return outcome
+	}
+	if err := s.db.Where("provider_id = ? AND source_path = ?", providerID, sourcePath).Delete(&model.AISessionIndex{}).Error; err != nil {
+		outcome.Error = err.Error()
+		return outcome
+	}
+	outcome.Success = true
+	return outcome
+}
+
 func (s *Service) scanAll(cfg Config, scannedAt int64) ([]SessionMeta, []ProviderStatus) {
 	result := make([]SessionMeta, 0)
 	statuses := make([]ProviderStatus, 0, len(cfg.Providers))
@@ -226,19 +279,20 @@ func (s *Service) replaceCache(sessions []SessionMeta, cfg Config, scannedAt int
 		}
 		for _, session := range sessions {
 			row := model.AISessionIndex{
-				ProviderID:   session.ProviderID,
-				SourcePath:   session.SourcePath,
-				SessionID:    session.SessionID,
-				Title:        session.Title,
-				Summary:      session.Summary,
-				ProjectDir:   session.ProjectDir,
-				CreatedAt:    session.CreatedAt,
-				LastActiveAt: session.LastActiveAt,
-				MessageCount: session.MessageCount,
-				ParseError:   session.ParseError,
-				FileSize:     session.FileSize,
-				FileModTime:  session.FileModTime,
-				ScannedAt:    scannedAt,
+				ProviderID:    session.ProviderID,
+				SourcePath:    session.SourcePath,
+				SessionID:     session.SessionID,
+				Title:         session.Title,
+				Summary:       session.Summary,
+				ProjectDir:    session.ProjectDir,
+				ResumeCommand: session.ResumeCommand,
+				CreatedAt:     session.CreatedAt,
+				LastActiveAt:  session.LastActiveAt,
+				MessageCount:  session.MessageCount,
+				ParseError:    session.ParseError,
+				FileSize:      session.FileSize,
+				FileModTime:   session.FileModTime,
+				ScannedAt:     scannedAt,
 			}
 			if err := tx.Create(&row).Error; err != nil {
 				return err
@@ -284,20 +338,52 @@ func rowsToSessions(rows []model.AISessionIndex, showParseErrors bool) []Session
 
 func sessionFromRow(row model.AISessionIndex) SessionMeta {
 	return SessionMeta{
-		ProviderID:   row.ProviderID,
-		SessionID:    row.SessionID,
-		Title:        row.Title,
-		Summary:      row.Summary,
-		ProjectDir:   row.ProjectDir,
-		CreatedAt:    row.CreatedAt,
-		LastActiveAt: row.LastActiveAt,
-		SourcePath:   row.SourcePath,
-		MessageCount: row.MessageCount,
-		ParseError:   row.ParseError,
-		FileSize:     row.FileSize,
-		FileModTime:  row.FileModTime,
-		ScannedAt:    row.ScannedAt,
+		ProviderID:    row.ProviderID,
+		SessionID:     row.SessionID,
+		Title:         row.Title,
+		Summary:       row.Summary,
+		ProjectDir:    row.ProjectDir,
+		ResumeCommand: row.ResumeCommand,
+		CreatedAt:     row.CreatedAt,
+		LastActiveAt:  row.LastActiveAt,
+		SourcePath:    row.SourcePath,
+		MessageCount:  row.MessageCount,
+		ParseError:    row.ParseError,
+		FileSize:      row.FileSize,
+		FileModTime:   row.FileModTime,
+		ScannedAt:     row.ScannedAt,
 	}
+}
+
+func validateSessionPath(roots []string, sourcePath string) (string, string, error) {
+	sourceInfo, err := os.Stat(sourcePath)
+	if err != nil {
+		return "", "", err
+	}
+	validatedSource, err := canonicalPath(sourcePath)
+	if err != nil {
+		return "", "", err
+	}
+	if sourceInfo.IsDir() {
+		validatedSource = filepath.Clean(validatedSource)
+	}
+	for _, root := range roots {
+		if !pathExists(root) {
+			continue
+		}
+		validatedRoot, err := canonicalPath(root)
+		if err != nil {
+			continue
+		}
+		relative, err := filepath.Rel(validatedRoot, validatedSource)
+		if err != nil {
+			continue
+		}
+		if relative == "." || (!strings.HasPrefix(relative, ".."+string(filepath.Separator)) && relative != "..") {
+			return validatedSource, validatedRoot, nil
+		}
+	}
+	return "", "", fmt.Errorf("session source path is outside provider roots: %s", sourcePath)
 }
 
 func filterParseErrors(sessions []SessionMeta, showParseErrors bool) []SessionMeta {

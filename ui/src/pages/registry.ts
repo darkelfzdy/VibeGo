@@ -1,4 +1,4 @@
-import type { PageDefinition, PageId } from "./types";
+import type { PageDefinition, PageId } from "@/pages/types";
 
 class PageRegistry {
   private pages: Map<PageId, PageDefinition> = new Map();

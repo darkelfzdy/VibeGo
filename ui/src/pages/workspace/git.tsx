@@ -1,10 +1,10 @@
 import { GitGraph } from "lucide-react";
 import React, { useCallback } from "react";
 import { ConflictView, DiffView, GitView } from "@/components/git";
+import { registerPage } from "@/pages/registry";
+import type { PageViewProps } from "@/pages/types";
 import { getOrCreateGitStore, useFrameStore } from "@/stores";
 import { useAppStore } from "@/stores/app-store";
-import { registerPage } from "../registry";
-import type { PageViewProps } from "../types";
 
 interface GitDiffTabPayload {
   original: string;
@@ -71,7 +71,7 @@ const GitViewPage: React.FC<PageViewProps> = ({ context }) => {
         locale={locale}
         onFileDiff={handleGitDiff}
         onConflict={handleConflict}
-        isActive={true}
+        isActive={context.isActive}
       />
     );
   }

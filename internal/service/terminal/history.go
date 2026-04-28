@@ -8,21 +8,25 @@ import (
 
 func (m *Manager) flushHistoryToDB(at *activeTerminal) error {
 	data := at.historyBuffer.Read()
-	if len(data) == 0 {
-		return nil
-	}
+	_, cursor := at.historyBuffer.CursorRange()
 
-	history := &model.TerminalHistory{
-		SessionID: at.ID,
-		Data:      data,
-		CreatedAt: time.Now().Unix(),
-	}
-
-	if err := m.db.Create(history).Error; err != nil {
+	now := time.Now().Unix()
+	if err := m.saveSnapshot(&TerminalSnapshot{
+		SessionID:   at.ID,
+		Data:        data,
+		Cursor:      cursor,
+		Cols:        at.Session.Cols,
+		Rows:        at.Session.Rows,
+		Status:      at.Session.Status,
+		ExitCode:    at.Session.ExitCode,
+		RuntimeType: at.Session.RuntimeType,
+		Readonly:    at.Session.Readonly,
+		UpdatedAt:   now,
+	}); err != nil {
 		return err
 	}
 
-	m.db.Model(&model.TerminalSession{}).Where("id = ?", at.ID).Update("history_size", int64(len(data)))
+	at.Session.HistorySize = int64(len(data))
 
 	if m.historyMaxRecords > 0 {
 		m.pruneOldHistoryRecords(at.ID)
@@ -68,16 +72,12 @@ func (m *Manager) flushHistory(at *activeTerminal) {
 }
 
 func (m *Manager) loadHistoryFromDB(sessionID string) ([]byte, error) {
-	var histories []model.TerminalHistory
-	if err := m.db.Where("session_id = ?", sessionID).
-		Order("created_at ASC").
-		Find(&histories).Error; err != nil {
+	snapshot, err := m.loadSnapshot(sessionID)
+	if err != nil {
 		return nil, err
 	}
-
-	if len(histories) == 0 {
+	if snapshot == nil {
 		return nil, nil
 	}
-
-	return histories[len(histories)-1].Data, nil
+	return snapshot.Data, nil
 }

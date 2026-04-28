@@ -248,12 +248,86 @@ func TestManager_List(t *testing.T) {
 	defer manager.Close(info1.ID)
 	defer manager.Close(info2.ID)
 
-	list, err := manager.List()
+	list, err := manager.List("", "")
 	if err != nil {
 		t.Fatalf("failed to list: %v", err)
 	}
 	if len(list) < 2 {
 		t.Errorf("expected at least 2 terminals, got %d", len(list))
+	}
+}
+
+func TestManager_SyncWorkspaceMetadata(t *testing.T) {
+	db := setupTestDB(t)
+	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh"})
+
+	info1, err := manager.Create(CreateOptions{Name: "test1", Cwd: os.TempDir(), Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatalf("failed to create terminal: %v", err)
+	}
+	info2, err := manager.Create(CreateOptions{Name: "test2", Cwd: os.TempDir(), Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatalf("failed to create terminal: %v", err)
+	}
+	defer manager.Close(info1.ID)
+	defer manager.Close(info2.ID)
+
+	err = manager.SyncWorkspaceMetadata("session-1", []WorkspaceTerminalAssignment{
+		{ID: info1.ID, GroupID: "group-1", ParentID: ""},
+		{ID: info2.ID, GroupID: "group-1", ParentID: info1.ID},
+	})
+	if err != nil {
+		t.Fatalf("failed to sync workspace metadata: %v", err)
+	}
+
+	list, err := manager.List("session-1", "group-1")
+	if err != nil {
+		t.Fatalf("failed to list synced terminals: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("expected 2 terminals, got %d", len(list))
+	}
+
+	var childFound bool
+	for _, item := range list {
+		if item.ID == info2.ID {
+			childFound = true
+			if item.ParentID != info1.ID {
+				t.Fatalf("expected parent %s, got %s", info1.ID, item.ParentID)
+			}
+		}
+	}
+	if !childFound {
+		t.Fatal("expected child terminal in synced list")
+	}
+
+	err = manager.SyncWorkspaceMetadata("session-1", []WorkspaceTerminalAssignment{
+		{ID: info1.ID, GroupID: "group-2", ParentID: ""},
+	})
+	if err != nil {
+		t.Fatalf("failed to resync workspace metadata: %v", err)
+	}
+
+	group1List, err := manager.List("session-1", "group-1")
+	if err != nil {
+		t.Fatalf("failed to list group-1 terminals: %v", err)
+	}
+	if len(group1List) != 0 {
+		t.Fatalf("expected 0 terminals in old group, got %d", len(group1List))
+	}
+
+	var child model.TerminalSession
+	if err := db.Where("id = ?", info2.ID).First(&child).Error; err != nil {
+		t.Fatalf("failed to load child terminal: %v", err)
+	}
+	if child.WorkspaceSessionID != "" {
+		t.Fatalf("expected child workspace_session_id to be cleared, got %s", child.WorkspaceSessionID)
+	}
+	if child.GroupID != "" {
+		t.Fatalf("expected child group_id to be cleared, got %s", child.GroupID)
+	}
+	if child.ParentID != info1.ID {
+		t.Fatalf("expected child parent_id to remain %s, got %s", info1.ID, child.ParentID)
 	}
 }
 
@@ -271,6 +345,47 @@ func TestManager_Delete(t *testing.T) {
 	_, ok := manager.Get(info.ID)
 	if ok {
 		t.Error("expected terminal to be deleted")
+	}
+}
+
+func TestManager_DeleteRemovesSplitTree(t *testing.T) {
+	db := setupTestDB(t)
+	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh"})
+
+	root, err := manager.Create(CreateOptions{Name: "root", Cwd: os.TempDir(), Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatalf("failed to create root terminal: %v", err)
+	}
+	child, err := manager.Create(CreateOptions{Name: "child", Cwd: os.TempDir(), Cols: 80, Rows: 24, ParentID: root.ID})
+	if err != nil {
+		t.Fatalf("failed to create child terminal: %v", err)
+	}
+
+	if err := db.Create(&model.TerminalHistory{SessionID: root.ID, Data: []byte("root"), CreatedAt: time.Now().Unix()}).Error; err != nil {
+		t.Fatalf("failed to seed root history: %v", err)
+	}
+	if err := db.Create(&model.TerminalHistory{SessionID: child.ID, Data: []byte("child"), CreatedAt: time.Now().Unix()}).Error; err != nil {
+		t.Fatalf("failed to seed child history: %v", err)
+	}
+
+	if err := manager.Delete(root.ID); err != nil {
+		t.Fatalf("failed to delete split tree: %v", err)
+	}
+
+	var remainingSessions int64
+	if err := db.Model(&model.TerminalSession{}).Where("id IN ?", []string{root.ID, child.ID}).Count(&remainingSessions).Error; err != nil {
+		t.Fatalf("failed to count sessions: %v", err)
+	}
+	if remainingSessions != 0 {
+		t.Fatalf("expected split tree sessions to be deleted, got %d", remainingSessions)
+	}
+
+	var remainingHistory int64
+	if err := db.Model(&model.TerminalHistory{}).Where("session_id IN ?", []string{root.ID, child.ID}).Count(&remainingHistory).Error; err != nil {
+		t.Fatalf("failed to count history: %v", err)
+	}
+	if remainingHistory != 0 {
+		t.Fatalf("expected split tree history to be deleted, got %d", remainingHistory)
 	}
 }
 

@@ -14,6 +14,12 @@ from pathlib import Path
 REPOSITORY_URL = "https://github.com/xxnuo/VibeGo"
 
 PLATFORMS = {
+    ("android", "arm64"): {
+        "node_os": "android",
+        "node_cpu": "arm64",
+        "pkg_suffix": "android-arm64",
+        "binary_name": "vibego",
+    },
     ("linux", "amd64"): {
         "node_os": "linux",
         "node_cpu": "x64",

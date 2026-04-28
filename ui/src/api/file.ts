@@ -1,4 +1,4 @@
-import { API_BASE, request } from "./request";
+import { API_BASE, request } from "@/api/request";
 
 export interface FileInfo {
   path: string;

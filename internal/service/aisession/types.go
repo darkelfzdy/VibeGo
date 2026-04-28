@@ -11,19 +11,20 @@ const (
 )
 
 type SessionMeta struct {
-	ProviderID   string `json:"providerId"`
-	SessionID    string `json:"sessionId"`
-	Title        string `json:"title,omitempty"`
-	Summary      string `json:"summary,omitempty"`
-	ProjectDir   string `json:"projectDir,omitempty"`
-	CreatedAt    int64  `json:"createdAt,omitempty"`
-	LastActiveAt int64  `json:"lastActiveAt,omitempty"`
-	SourcePath   string `json:"sourcePath"`
-	MessageCount int    `json:"messageCount,omitempty"`
-	ParseError   string `json:"parseError,omitempty"`
-	FileSize     int64  `json:"fileSize,omitempty"`
-	FileModTime  int64  `json:"fileModTime,omitempty"`
-	ScannedAt    int64  `json:"scannedAt,omitempty"`
+	ProviderID    string `json:"providerId"`
+	SessionID     string `json:"sessionId"`
+	Title         string `json:"title,omitempty"`
+	Summary       string `json:"summary,omitempty"`
+	ProjectDir    string `json:"projectDir,omitempty"`
+	ResumeCommand string `json:"resumeCommand,omitempty"`
+	CreatedAt     int64  `json:"createdAt,omitempty"`
+	LastActiveAt  int64  `json:"lastActiveAt,omitempty"`
+	SourcePath    string `json:"sourcePath"`
+	MessageCount  int    `json:"messageCount,omitempty"`
+	ParseError    string `json:"parseError,omitempty"`
+	FileSize      int64  `json:"fileSize,omitempty"`
+	FileModTime   int64  `json:"fileModTime,omitempty"`
+	ScannedAt     int64  `json:"scannedAt,omitempty"`
 }
 
 type SessionMessage struct {
@@ -63,15 +64,23 @@ type Overview struct {
 }
 
 type ListResult struct {
-	Sessions       []SessionMeta     `json:"sessions"`
-	ProviderStatus []ProviderStatus  `json:"providerStatus"`
-	FromCache      bool              `json:"fromCache"`
-	ScannedAt      int64             `json:"scannedAt,omitempty"`
-	Config         Config            `json:"config"`
+	Sessions       []SessionMeta    `json:"sessions"`
+	ProviderStatus []ProviderStatus `json:"providerStatus"`
+	FromCache      bool             `json:"fromCache"`
+	ScannedAt      int64            `json:"scannedAt,omitempty"`
+	Config         Config           `json:"config"`
 }
 
 type MessagesResult struct {
-	Session       SessionMeta       `json:"session"`
-	Messages      []SessionMessage  `json:"messages"`
-	ParseWarnings []string          `json:"parseWarnings"`
+	Session       SessionMeta      `json:"session"`
+	Messages      []SessionMessage `json:"messages"`
+	ParseWarnings []string         `json:"parseWarnings"`
+}
+
+type DeleteOutcome struct {
+	ProviderID string `json:"providerId"`
+	SessionID  string `json:"sessionId"`
+	SourcePath string `json:"sourcePath"`
+	Success    bool   `json:"success"`
+	Error      string `json:"error,omitempty"`
 }

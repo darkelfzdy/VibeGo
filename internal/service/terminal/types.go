@@ -8,23 +8,55 @@ import (
 )
 
 type TerminalInfo struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Shell     string `json:"shell"`
-	Cwd       string `json:"cwd"`
-	Cols      int    `json:"cols"`
-	Rows      int    `json:"rows"`
-	Status    string `json:"status"`
-	CreatedAt int64  `json:"created_at"`
-	UpdatedAt int64  `json:"updated_at"`
+	ID                  string               `json:"id"`
+	Name                string               `json:"name"`
+	Shell               string               `json:"shell"`
+	Cwd                 string               `json:"cwd"`
+	CurrentCwd          string               `json:"current_cwd"`
+	Cols                int                  `json:"cols"`
+	Rows                int                  `json:"rows"`
+	RuntimeType         string               `json:"runtime_type"`
+	Readonly            bool                 `json:"readonly"`
+	Capabilities        TerminalCapabilities `json:"capabilities"`
+	Status              string               `json:"status"`
+	WorkspaceSessionID  string               `json:"workspace_session_id"`
+	GroupID             string               `json:"group_id"`
+	ParentID            string               `json:"parent_id"`
+	ShellType           string               `json:"shell_type"`
+	ShellState          string               `json:"shell_state"`
+	ShellIntegration    bool                 `json:"shell_integration"`
+	LastCommand         string               `json:"last_command"`
+	LastCommandExitCode *int                 `json:"last_command_exit_code"`
+	ExitCode            int                  `json:"exit_code"`
+	HistorySize         int64                `json:"history_size"`
+	CreatedAt           int64                `json:"created_at"`
+	UpdatedAt           int64                `json:"updated_at"`
 }
 
 type CreateOptions struct {
-	Name   string
-	Cwd    string
-	Cols   int
-	Rows   int
-	UserID string
+	Name               string
+	Cwd                string
+	Cols               int
+	Rows               int
+	UserID             string
+	WorkspaceSessionID string
+	GroupID            string
+	ParentID           string
+}
+
+type ShellMetadataUpdate struct {
+	CurrentCwd          *string
+	ShellType           *string
+	ShellState          *string
+	ShellIntegration    *bool
+	LastCommand         *string
+	LastCommandExitCode *int
+}
+
+type WorkspaceTerminalAssignment struct {
+	ID       string
+	GroupID  string
+	ParentID string
 }
 
 type Connection struct {
@@ -82,15 +114,35 @@ func (c *ManagerConfig) applyDefaults() {
 }
 
 func sessionToInfo(s *model.TerminalSession) *TerminalInfo {
+	capabilities := TerminalCapabilities{
+		Resume:           true,
+		Snapshot:         true,
+		ShellIntegration: s.ShellIntegration,
+		Durable:          false,
+	}
 	return &TerminalInfo{
-		ID:        s.ID,
-		Name:      s.Name,
-		Shell:     s.Shell,
-		Cwd:       s.Cwd,
-		Cols:      s.Cols,
-		Rows:      s.Rows,
-		Status:    s.Status,
-		CreatedAt: s.CreatedAt,
-		UpdatedAt: s.UpdatedAt,
+		ID:                  s.ID,
+		Name:                s.Name,
+		Shell:               s.Shell,
+		Cwd:                 s.Cwd,
+		CurrentCwd:          s.CurrentCwd,
+		Cols:                s.Cols,
+		Rows:                s.Rows,
+		RuntimeType:         s.RuntimeType,
+		Readonly:            s.Readonly,
+		Capabilities:        capabilities,
+		Status:              s.Status,
+		WorkspaceSessionID:  s.WorkspaceSessionID,
+		GroupID:             s.GroupID,
+		ParentID:            s.ParentID,
+		ShellType:           s.ShellType,
+		ShellState:          s.ShellState,
+		ShellIntegration:    s.ShellIntegration,
+		LastCommand:         s.LastCommand,
+		LastCommandExitCode: s.LastCommandExitCode,
+		ExitCode:            s.ExitCode,
+		HistorySize:         s.HistorySize,
+		CreatedAt:           s.CreatedAt,
+		UpdatedAt:           s.UpdatedAt,
 	}
 }

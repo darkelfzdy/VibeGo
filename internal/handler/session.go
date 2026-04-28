@@ -25,6 +25,7 @@ func (h *SessionHandler) Register(r *gin.RouterGroup) {
 	g.POST("", h.Create)
 	g.GET("/:id", h.Get)
 	g.PUT("/:id", h.Update)
+	g.PATCH("/:id/workspace", h.PatchWorkspace)
 	g.DELETE("/:id", h.Delete)
 }
 
@@ -34,6 +35,18 @@ type SessionInfo struct {
 	Name      string `json:"name"`
 	CreatedAt int64  `json:"created_at"`
 	UpdatedAt int64  `json:"updated_at"`
+}
+
+type SessionDetail struct {
+	ID             string         `json:"id"`
+	UserID         string         `json:"user_id"`
+	Name           string         `json:"name"`
+	State          string         `json:"state"`
+	WorkspaceState WorkspaceState `json:"workspace_state"`
+	LastActiveAt   int64          `json:"last_active_at"`
+	ExpiredAt      int64          `json:"expired_at"`
+	CreatedAt      int64          `json:"created_at"`
+	UpdatedAt      int64          `json:"updated_at"`
 }
 
 func (h *SessionHandler) List(c *gin.Context) {
@@ -95,11 +108,16 @@ func (h *SessionHandler) Create(c *gin.Context) {
 
 	now := time.Now().Unix()
 	expiredAt := now + 7*24*60*60
+	state, err := marshalWorkspaceState(emptyWorkspaceState())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	session := model.UserSession{
 		ID:           uuid.New().String(),
 		UserID:       req.UserID,
 		Name:         name,
-		State:        "{}",
+		State:        state,
 		LastActiveAt: now,
 		ExpiredAt:    expiredAt,
 		CreatedAt:    now,
@@ -131,12 +149,26 @@ func (h *SessionHandler) Get(c *gin.Context) {
 	h.db.Model(&session).Update("last_active_at", now)
 	session.LastActiveAt = now
 
-	c.JSON(http.StatusOK, session)
+	workspaceState, err := parseWorkspaceState(session.State)
+	if err != nil {
+		workspaceState = emptyWorkspaceState()
+	}
+
+	c.JSON(http.StatusOK, SessionDetail{
+		ID:             session.ID,
+		UserID:         session.UserID,
+		Name:           session.Name,
+		State:          session.State,
+		WorkspaceState: workspaceState,
+		LastActiveAt:   session.LastActiveAt,
+		ExpiredAt:      session.ExpiredAt,
+		CreatedAt:      session.CreatedAt,
+		UpdatedAt:      session.UpdatedAt,
+	})
 }
 
 type UpdateSessionRequest struct {
-	Name  *string `json:"name,omitempty"`
-	State *string `json:"state,omitempty"`
+	Name *string `json:"name,omitempty"`
 }
 
 func (h *SessionHandler) Update(c *gin.Context) {
@@ -161,12 +193,30 @@ func (h *SessionHandler) Update(c *gin.Context) {
 	if req.Name != nil {
 		updates["name"] = *req.Name
 	}
-	if req.State != nil {
-		updates["state"] = *req.State
-	}
 
 	if err := h.db.Model(&session).Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (h *SessionHandler) PatchWorkspace(c *gin.Context) {
+	id := c.Param("id")
+
+	var req WorkspaceStatePatch
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if _, err := updateSessionWorkspaceState(h.db, id, req); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 

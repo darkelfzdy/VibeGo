@@ -47,6 +47,7 @@
     "fullscreen": "全屏",
     "exitFullscreen": "退出全屏",
     "search": "搜索",
+    "copy": "复制",
     "copied": "已复制",
     "pageNotFound": "页面不存在",
     "saveFailed": "保存失败"
@@ -89,6 +90,7 @@
     "summaryPlaceholder": "摘要（必填）",
     "descriptionPlaceholder": "详细描述",
     "amend": "修改上次提交",
+    "useAutoMessage": "使用自动生成的提交信息",
     "selectAll": "全选",
     "noChanges": "没有更改",
     "noCommits": "暂无提交记录",
@@ -168,7 +170,9 @@
     "notARepoHint": "当前文件夹尚未初始化为 Git 仓库，初始化后即可开始追踪文件变更。",
     "initRepo": "初始化仓库",
     "initRepoConfirmTitle": "初始化 Git 仓库？",
-    "initRepoConfirmMessage": "这将在当前文件夹创建 .git 目录并开始追踪文件变更。"
+    "initRepoConfirmMessage": "这将在当前文件夹创建 .git 目录并开始追踪文件变更。",
+    "unpushedCommit": "此提交尚未推送",
+    "unpushedCommits": "个未推送提交"
   },
   "terminal": {
     "noActiveSession": "无活动终端会话",
@@ -194,11 +198,16 @@
     "selected": "已选择",
     "deleteHistoryTitle": "删除终端历史",
     "deleteHistoryConfirm": "确定要删除 {count} 条终端历史记录吗？此操作无法撤销。",
+    "closeFailed": "关闭终端失败",
+    "deleteFailed": "删除终端失败",
     "renameFailed": "重命名终端失败",
     "readOnly": "只读",
     "new": "新建终端",
     "list": "终端列表",
-    "backToTerminal": "返回终端"
+    "backToTerminal": "返回终端",
+    "tipsTitle": "Tips",
+    "tipScroll": "终端区域支持双指上下滑动滚动内容。",
+    "tipSplit": "可在主菜单中使用向下或向右分屏来拆分终端。"
   },
   "fileTree": {
     "projectRoot": "项目根目录"
@@ -228,7 +237,14 @@
       "fileManager": "文件管理器",
       "editor": "编辑器",
       "terminal": "终端",
+      "notification": "通知",
+      "page": "页面",
+      "keyboard": "键盘",
       "git": "Git"
+    },
+    "pageVisibility": {
+      "label": "新建页面条目",
+      "description": "控制新建页面菜单中显示哪些功能。"
     },
     "theme": {
       "label": "主题",
@@ -276,9 +292,22 @@
       "label": "自动换行",
       "description": "在编辑器中启用自动换行"
     },
+    "terminalFontFamily": {
+      "label": "终端字体",
+      "description": "选择终端会话使用的等宽字体",
+      "optionDefault": "默认终端字体",
+      "optionSystemMono": "跟随界面等宽字体"
+    },
     "terminalDesktopNotifications": {
       "label": "桌面通知",
       "description": "当网页在后台且终端不是活动终端时，优先使用浏览器系统通知"
+    },
+    "notificationTest": {
+      "label": "测试通知",
+      "description": "发送一条应用内通知，用来检查当前位置、样式和滑动关闭。",
+      "button": "发送测试通知",
+      "toastTitle": "测试通知",
+      "toastDescription": "这是一条用于验证通知样式和交互的测试消息。"
     },
     "gitUserName": {
       "label": "Git 用户名",
@@ -292,11 +321,35 @@
       "label": "默认提交信息",
       "description": "打开 Git 页面或提交完成后自动填入的提交标题"
     },
-    "gitCommitTimeMode": {
-      "label": "提交时间模式",
-      "description": "提交时使用客户端当前时间，还是基于上一个提交时间递增",
-      "optionClient": "客户端时间",
-      "optionIncrement": "上次提交递增"
+    "useNativeKeyboard": {
+      "label": "使用系统键盘",
+      "description": "禁用虚拟键盘，输入时使用系统自带键盘"
+    },
+    "keyboardHaptic": {
+      "label": "按键震动",
+      "description": "按下虚拟键盘按键时触发震动反馈"
+    },
+    "keyboardSound": {
+      "label": "按键声音",
+      "description": "按下虚拟键盘按键时播放仿 iOS 键盘按键音"
+    },
+    "speechAssetSource": {
+      "label": "语音下载源",
+      "description": "选择语音模型资源下载源",
+      "optionAuto": "自动选择",
+      "optionOfficial": "官方源",
+      "optionChina": "中国镜像"
+    },
+    "speechAssets": {
+      "label": "语音识别资源",
+      "description": "首次使用语音识别前，请先在这里下载离线语音识别资源",
+      "button": "下载资源",
+      "downloading": "正在下载语音识别资源",
+      "downloaded": "语音识别资源已下载",
+      "downloadFailed": "语音识别资源下载失败",
+      "missingTitle": "语音识别资源未下载",
+      "missingDescription": "请点击打开设置页的键盘设置页面，在那里下载语音识别资源。",
+      "openSettings": "打开设置"
     },
     "option": {
       "light": "浅色",
@@ -374,6 +427,7 @@
     },
     "processMonitor": {
       "name": "进程监视器",
+      "description": "查看系统资源和进程列表，支持搜索、排序和终止进程。",
       "title": "进程监视器",
       "refresh": "刷新",
       "search": "搜索...",
@@ -425,6 +479,7 @@
     },
     "aiSessionManager": {
       "name": "AI 会话查看器",
+      "description": "浏览本机 AI 工具会话，支持搜索、查看详情和管理扫描源。",
       "settings": "扫描设置",
       "backToSessions": "返回会话",
       "loadFailed": "加载会话失败",
@@ -447,6 +502,8 @@
       "searchInSession": "在当前会话中搜索",
       "matchedMessages": "{count} 条命中",
       "emptyMessages": "该会话没有可显示的消息",
+      "pullToRefresh": "下拉刷新",
+      "releaseToRefresh": "松开刷新",
       "autoRescanOnOpen": "打开时自动重扫",
       "autoRescanOnOpenDesc": "每次打开页面时自动扫描所有已启用工具的会话",
       "cacheEnabled": "启用本地索引缓存",
@@ -469,6 +526,34 @@
       "generalSettings": "通用",
       "providerSettings": "AI 工具",
       "saveConfig": "保存并重扫",
+      "copyFailed": "复制失败",
+      "messageCopied": "消息已复制",
+      "resumeCopied": "恢复命令已复制",
+      "projectCopied": "项目路径已复制",
+      "projectOpened": "已打开项目目录",
+      "openProjectFailed": "打开项目目录失败",
+      "expandHeader": "展开头部",
+      "collapseHeader": "收起头部",
+      "copyResumeCommand": "复制恢复命令",
+      "copyProjectPath": "复制项目路径",
+      "openProject": "打开项目目录",
+      "deleteCurrent": "删除会话",
+      "deleteCurrentShort": "删除",
+      "deleteSelected": "批量删除",
+      "deleteSuccess": "删除成功",
+      "deleteFailed": "删除失败",
+      "batchDeleteSuccess": "已删除 {count} 个会话",
+      "deleteConfirm": "确定删除这个本地会话吗？",
+      "batchDeleteConfirm": "确定删除这 {count} 个本地会话吗？",
+      "selectedCount": "已选 {count} 项",
+      "selectAllFiltered": "全选当前",
+      "clearFilteredSelection": "取消全选",
+      "clearSelection": "清空已选",
+      "expandContent": "展开完整内容",
+      "collapseContent": "收起",
+      "expandAllMessages": "展开全部长消息",
+      "collapseAllMessages": "收起全部长消息",
+      "deleting": "删除中",
       "roleAssistant": "AI",
       "roleUser": "用户",
       "roleTool": "工具",
@@ -478,6 +563,7 @@
     },
     "remoteControl": {
       "name": "遥控器",
+      "description": "控制当前设备的音量、媒体播放和屏幕开关。",
       "title": "遥控器",
       "volume": "音量",
       "mute": "静音",
@@ -486,10 +572,85 @@
       "screen": "屏幕",
       "screenOff": "关闭屏幕",
       "screenOn": "开启屏幕"
+    },
+    "portManager": {
+      "name": "端口管理器",
+      "description": "查看监听端口、终止占用进程，并管理端口转发规则。",
+      "title": "端口管理器",
+      "refresh": "刷新",
+      "search": "搜索...",
+      "ports": "端口列表",
+      "forwards": "端口转发",
+      "port": "端口",
+      "protocol": "协议",
+      "localAddr": "本地地址",
+      "remoteAddr": "远程地址",
+      "status": "状态",
+      "pid": "PID",
+      "processName": "进程",
+      "noListeningPorts": "无监听端口",
+      "loading": "加载中...",
+      "addForward": "添加转发",
+      "listenPort": "监听端口",
+      "targetAddr": "目标地址",
+      "enabled": "已启用",
+      "disabled": "已禁用",
+      "enable": "启用",
+      "disable": "禁用",
+      "remove": "移除",
+      "noForwards": "无转发规则",
+      "addForwardTitle": "添加转发规则",
+      "selectProtocol": "选择协议",
+      "listenPortPlaceholder": "端口号",
+      "targetAddrPlaceholder": "host:port 或 http://...",
+      "creating": "创建中...",
+      "create": "创建",
+      "tcp": "TCP",
+      "udp": "UDP",
+      "http": "HTTP",
+      "listening": "监听中",
+      "total": "总计",
+      "removeConfirm": "移除此转发规则？",
+      "removeConfirmDesc": "端口转发将被停止并移除。",
+      "killProcess": "终止进程",
+      "killConfirm": "终止此进程？",
+      "killConfirmDesc": "进程将被终止，端口将被释放。",
+      "openInBrowser": "在浏览器中打开",
+      "createForward": "创建转发",
+      "httpHint": "完整 URL，例如 http://localhost:8080",
+      "tcpHint": "host:port，例如 localhost:8080"
+    },
+    "keyboardTest": {
+      "name": "键盘测试",
+      "description": "验证虚拟键盘输入、组合键和事件记录。",
+      "title": "键盘测试",
+      "clear": "清除",
+      "placeholder": "点击键盘在此处输入...",
+      "eventLog": "事件日志"
+    },
+    "blockTerm": {
+      "name": "BlockTerm",
+      "description": "按命令块运行终端任务，便于查看输出、复制和重跑。",
+      "title": "BlockTerm",
+      "run": "运行",
+      "stop": "停止",
+      "clear": "清空",
+      "ready": "就绪",
+      "connecting": "连接中",
+      "disconnected": "未连接",
+      "running": "运行中",
+      "newSession": "新会话",
+      "waitingOutput": "等待输出...",
+      "emptyTitle": "块状终端",
+      "emptyHint": "输入命令后会生成独立块，适合查看、复制和重跑历史命令。交互式 TUI 会自动进入终端舱。",
+      "placeholder": "输入 shell 命令，Enter 运行，Shift+Enter 换行"
     }
   },
   "newPage": {
     "plugins": "插件"
+  },
+  "pageTag": {
+    "test": "测试"
   },
   "directoryPicker": {
     "title": "选择目录",
@@ -504,5 +665,20 @@
     "minutesShort": "{count} 分钟",
     "hoursMinutesShort": "{hours} 小时 {minutes} 分钟",
     "daysHoursShort": "{days} 天 {hours} 小时"
+  },
+  "httpUpgrade": {
+    "title": "切换到安全连接",
+    "heading": "正在切换到 HTTPS",
+    "description": "部分浏览器能力受安全上下文限制，必须切换到 HTTPS 后才能正常使用。",
+    "secureContextTitle": "浏览器能力限制",
+    "secureContextDescription": "例如语音输入需要访问麦克风，只能在 HTTPS 等安全上下文中启用。",
+    "certificateTitle": "自动生成自签证书",
+    "certificateDescription": "VibeGo 会为当前服务生成安全的随机自签证书，并自动跳转到 HTTPS 地址。",
+    "trustTitle": "下一步需要手动确认",
+    "trustDescription": "跳转后的页面如果出现证书风险提示，请在浏览器中点击信任并继续访问。",
+    "targetLabel": "即将前往",
+    "disableHint": "如需关闭此行为，请在启动时传入 {flag}",
+    "countdown": "{seconds} 秒后自动跳转",
+    "openNow": "立即前往 HTTPS"
   }
 }

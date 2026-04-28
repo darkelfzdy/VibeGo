@@ -166,6 +166,23 @@ func TestFileList(t *testing.T) {
 	assert.Len(t, files, 2)
 }
 
+func TestFileListEmptyDir(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+
+	os.Mkdir(filepath.Join(tmpDir, "empty"), 0755)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/file/list?path=empty", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var result map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &result)
+	files, ok := result["files"].([]interface{})
+	assert.True(t, ok)
+	assert.Len(t, files, 0)
+}
+
 func TestFileListNotFound(t *testing.T) {
 	_, r, _ := setupTestFileHandler(t)
 

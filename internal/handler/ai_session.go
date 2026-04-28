@@ -22,6 +22,8 @@ func (h *AISessionHandler) Register(r *gin.RouterGroup) {
 	g.GET("/overview", h.Overview)
 	g.POST("/rescan", h.Rescan)
 	g.POST("/messages", h.Messages)
+	g.POST("/delete", h.Delete)
+	g.POST("/delete-batch", h.DeleteBatch)
 	g.GET("/config", h.GetConfig)
 	g.POST("/config", h.SetConfig)
 }
@@ -58,6 +60,12 @@ type aiSessionMessagesRequest struct {
 	SourcePath string `json:"sourcePath" binding:"required"`
 }
 
+type aiSessionDeleteRequest struct {
+	ProviderID string `json:"providerId" binding:"required"`
+	SessionID  string `json:"sessionId" binding:"required"`
+	SourcePath string `json:"sourcePath" binding:"required"`
+}
+
 func (h *AISessionHandler) Messages(c *gin.Context) {
 	var req aiSessionMessagesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -70,6 +78,32 @@ func (h *AISessionHandler) Messages(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, result)
+}
+
+func (h *AISessionHandler) Delete(c *gin.Context) {
+	var req aiSessionDeleteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.service.DeleteSession(req.ProviderID, req.SessionID, req.SourcePath); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (h *AISessionHandler) DeleteBatch(c *gin.Context) {
+	var req []aiSessionDeleteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	items := make([]aisession.DeleteOutcome, 0, len(req))
+	for _, item := range req {
+		items = append(items, h.service.DeleteSessionOutcome(item.ProviderID, item.SessionID, item.SourcePath))
+	}
+	c.JSON(http.StatusOK, items)
 }
 
 func (h *AISessionHandler) GetConfig(c *gin.Context) {

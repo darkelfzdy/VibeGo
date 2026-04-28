@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { terminalApi } from "@/api/terminal";
 import { useTerminalStore } from "@/stores";
+import { useSessionStore } from "@/stores/session-store";
 
 export const terminalKeys = {
   all: ["terminals"] as const,
@@ -18,6 +19,7 @@ export function useTerminalCreate(groupId: string) {
   const queryClient = useQueryClient();
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const getTerminals = useTerminalStore((s) => s.getTerminals);
+  const getCurrentSessionId = useSessionStore((s) => s.getCurrentSessionId);
 
   return useMutation({
     mutationFn: (opts?: { cwd?: string; cols?: number; rows?: number }) => {
@@ -30,7 +32,12 @@ export function useTerminalCreate(groupId: string) {
         .filter((n) => n > 0);
       const nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
       const name = `Terminal ${nextNumber}`;
-      return terminalApi.create({ ...opts, name });
+      return terminalApi.create({
+        ...opts,
+        name,
+        workspace_session_id: getCurrentSessionId() || undefined,
+        group_id: groupId,
+      });
     },
     onSuccess: (data) => {
       addTerminal(groupId, { id: data.id, name: data.name });

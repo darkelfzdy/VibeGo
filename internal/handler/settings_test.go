@@ -122,6 +122,28 @@ func TestSettingsReset(t *testing.T) {
 	assert.Empty(t, result)
 }
 
+func TestSettingsDelete(t *testing.T) {
+	_, r := setupTestSettingsHandler(t)
+
+	body := `{"key":"theme","value":"dark"}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/settings/set", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("DELETE", "/api/settings/theme", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/api/settings/get?key=theme", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
 func TestSettingsListWithData(t *testing.T) {
 	_, r := setupTestSettingsHandler(t)
 

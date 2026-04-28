@@ -1,4 +1,4 @@
-export type SettingType = "select" | "toggle" | "text" | "number";
+export type SettingType = "select" | "toggle" | "text" | "number" | "action";
 
 export interface SettingOption {
   value: string;
@@ -113,6 +113,19 @@ export const SETTINGS_SCHEMA: SettingSchema[] = [
     defaultValue: "false",
   },
   {
+    key: "terminalFontFamily",
+    type: "select",
+    category: "terminal",
+    labelKey: "settings.terminalFontFamily.label",
+    descriptionKey: "settings.terminalFontFamily.description",
+    defaultValue: "default",
+    options: [
+      { value: "default", label: "settings.terminalFontFamily.optionDefault" },
+      { value: "jetbrains-mono", label: "JetBrains Mono" },
+      { value: "system-mono", label: "settings.terminalFontFamily.optionSystemMono" },
+    ],
+  },
+  {
     key: "terminalDesktopNotifications",
     type: "toggle",
     category: "terminal",
@@ -145,16 +158,49 @@ export const SETTINGS_SCHEMA: SettingSchema[] = [
     defaultValue: "",
   },
   {
-    key: "gitCommitTimeMode",
+    key: "useNativeKeyboard",
+    type: "toggle",
+    category: "keyboard",
+    labelKey: "settings.useNativeKeyboard.label",
+    descriptionKey: "settings.useNativeKeyboard.description",
+    defaultValue: "false",
+  },
+  {
+    key: "keyboardHaptic",
+    type: "toggle",
+    category: "keyboard",
+    labelKey: "settings.keyboardHaptic.label",
+    descriptionKey: "settings.keyboardHaptic.description",
+    defaultValue: "true",
+  },
+  {
+    key: "keyboardSound",
+    type: "toggle",
+    category: "keyboard",
+    labelKey: "settings.keyboardSound.label",
+    descriptionKey: "settings.keyboardSound.description",
+    defaultValue: "true",
+  },
+  {
+    key: "speechAssetSource",
     type: "select",
-    category: "git",
-    labelKey: "settings.gitCommitTimeMode.label",
-    descriptionKey: "settings.gitCommitTimeMode.description",
-    defaultValue: "client",
+    category: "keyboard",
+    labelKey: "settings.speechAssetSource.label",
+    descriptionKey: "settings.speechAssetSource.description",
+    defaultValue: "auto",
     options: [
-      { value: "client", label: "settings.gitCommitTimeMode.optionClient" },
-      { value: "increment", label: "settings.gitCommitTimeMode.optionIncrement" },
+      { value: "auto", label: "settings.speechAssetSource.optionAuto" },
+      { value: "official", label: "settings.speechAssetSource.optionOfficial" },
+      { value: "china", label: "settings.speechAssetSource.optionChina" },
     ],
+  },
+  {
+    key: "speechAssets",
+    type: "action",
+    category: "keyboard",
+    labelKey: "settings.speechAssets.label",
+    descriptionKey: "settings.speechAssets.description",
+    defaultValue: "",
   },
 ];
 
@@ -163,6 +209,9 @@ export const SETTING_CATEGORIES = [
   { key: "fileManager", labelKey: "settings.category.fileManager" },
   { key: "editor", labelKey: "settings.category.editor" },
   { key: "terminal", labelKey: "settings.category.terminal" },
+  { key: "notification", labelKey: "settings.category.notification" },
+  { key: "page", labelKey: "settings.category.page" },
+  { key: "keyboard", labelKey: "settings.category.keyboard" },
   { key: "git", labelKey: "settings.category.git" },
 ];
 

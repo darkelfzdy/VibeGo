@@ -1,5 +1,5 @@
-export { default as AppFrame } from "./app-frame";
-export { default as BottomBar } from "./bottom-bar";
-export { default as NewGroupMenu } from "./new-group-menu";
-export { default as TabBar } from "./tab-bar";
-export { default as TopBar } from "./top-bar";
+export { default as AppFrame } from "@/components/frame/app-frame";
+export { default as BottomBar } from "@/components/frame/bottom-bar";
+export { default as NewGroupMenu } from "@/components/frame/new-group-menu";
+export { default as TabBar } from "@/components/frame/tab-bar";
+export { default as TopBar } from "@/components/frame/top-bar";

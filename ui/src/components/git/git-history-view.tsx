@@ -1,4 +1,5 @@
 import {
+  ArrowUp,
   Check,
   ChevronDown,
   ChevronRight,
@@ -111,7 +112,9 @@ const useCachedAvatarUrl = (email: string, platforms: AvatarPlatform[]): string 
     fetchAndCacheAvatar(trimmed, platforms).then((result) => {
       if (!cancelled && result) setUrl(result);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [trimmed, platforms]);
 
   return url;
@@ -122,6 +125,7 @@ interface GitHistoryViewProps {
   isLoading: boolean;
   locale: Locale;
   remoteUrls: string[];
+  aheadCount: number;
   onCommitSelect: (commit: GitCommit) => void;
   onUndoCommit: (commit: GitCommit) => void;
   onFileClick: (commit: GitCommit, filePath: string) => void;
@@ -174,8 +178,6 @@ const hashColor = (name: string) => {
   return colors[Math.abs(h) % colors.length];
 };
 
-
-
 const CopyHashButton: React.FC<{ hash: string; locale: Locale }> = ({ hash, locale }) => {
   const [copied, setCopied] = useState(false);
   const t = (key: string) => getTranslation(locale, key);
@@ -202,6 +204,7 @@ interface CommitItemProps {
   commit: GitCommit;
   isExpanded: boolean;
   isSelected: boolean;
+  isUnpushed: boolean;
   locale: Locale;
   platforms: AvatarPlatform[];
   canUndoCommit: boolean;
@@ -216,6 +219,7 @@ const CommitItem: React.FC<CommitItemProps> = ({
   commit,
   isExpanded,
   isSelected,
+  isUnpushed,
   locale,
   platforms,
   canUndoCommit,
@@ -259,7 +263,12 @@ const CommitItem: React.FC<CommitItemProps> = ({
             </span>
           </div>
         </div>
-        <div className="pt-1">
+        <div className="flex items-center gap-1.5 pt-1">
+          {isUnpushed && (
+            <span className="shrink-0 px-2 py-0.5 rounded-full bg-ide-mute/15" title={t("git.unpushedCommit")}>
+              <ArrowUp size={12} className="text-ide-text/60" />
+            </span>
+          )}
           {isExpanded ? (
             <ChevronDown size={14} className="text-ide-mute" />
           ) : (
@@ -322,6 +331,7 @@ const GitHistoryView: React.FC<GitHistoryViewProps> = ({
   isLoading,
   locale,
   remoteUrls,
+  aheadCount,
   onCommitSelect,
   onUndoCommit,
   onFileClick,
@@ -369,14 +379,25 @@ const GitHistoryView: React.FC<GitHistoryViewProps> = ({
     return <div className="flex items-center justify-center h-32 text-ide-mute text-sm">{t("git.noCommits")}</div>;
   }
 
+  const unpushedCount = aheadCount > 0 ? aheadCount : 0;
+
   return (
     <div className="h-full overflow-y-auto bg-ide-bg" onScroll={handleScroll}>
+      {unpushedCount > 0 && (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/8 border-b border-blue-500/20">
+          <ArrowUp size={12} className="text-blue-400" />
+          <span className="text-[11px] text-blue-400 font-medium">
+            {unpushedCount} {t("git.unpushedCommits")}
+          </span>
+        </div>
+      )}
       {commits.map((commit, index) => (
         <CommitItem
           key={commit.hash}
           commit={commit}
           isExpanded={expandedHash === commit.hash}
           isSelected={selectedCommitHash === commit.hash}
+          isUnpushed={index < unpushedCount}
           locale={locale}
           platforms={platforms}
           canUndoCommit={index === 0 && commit.parentCount > 0}

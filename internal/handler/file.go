@@ -1260,7 +1260,7 @@ func (h *FileHandler) List(c *gin.Context) {
 		return
 	}
 	entries, _ := os.ReadDir(p)
-	var files []FileInfo
+	files := make([]FileInfo, 0, len(entries))
 	for _, e := range entries {
 		eInfo, _ := e.Info()
 		fi, _ := getFileInfo(filepath.Join(p, e.Name()))

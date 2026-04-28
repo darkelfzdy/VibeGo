@@ -105,3 +105,81 @@ func TestAISessionRescanAndMessages(t *testing.T) {
 	messages := messagesResp["messages"].([]any)
 	require.Len(t, messages, 1)
 }
+
+func TestAISessionDeleteAndBatchDelete(t *testing.T) {
+	_, router := setupTestAISessionHandler(t)
+	root := t.TempDir()
+	sessionA := filepath.Join(root, "session-a.jsonl")
+	sessionB := filepath.Join(root, "session-b.jsonl")
+	require.NoError(t, os.WriteFile(sessionA, []byte("{\"timestamp\":\"2026-03-06T10:00:00Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"codex-session-a\",\"cwd\":\"/tmp/demo\"}}\n"), 0644))
+	require.NoError(t, os.WriteFile(sessionB, []byte("{\"timestamp\":\"2026-03-06T10:00:00Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"codex-session-b\",\"cwd\":\"/tmp/demo\"}}\n"), 0644))
+
+	configBody := map[string]any{
+		"providers": map[string]any{
+			"claude":   map[string]any{"enabled": false, "paths": []string{}},
+			"codex":    map[string]any{"enabled": true, "paths": []string{root}},
+			"gemini":   map[string]any{"enabled": false, "paths": []string{}},
+			"opencode": map[string]any{"enabled": false, "paths": []string{}},
+			"openclaw": map[string]any{"enabled": false, "paths": []string{}},
+		},
+		"autoRescanOnOpen": true,
+		"cacheEnabled":     true,
+		"showParseErrors":  true,
+	}
+	configJSON, err := json.Marshal(configBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("POST", "/api/ai-sessions/config", bytes.NewReader(configJSON))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	req = httptest.NewRequest("POST", "/api/ai-sessions/rescan", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	deleteBody, err := json.Marshal(map[string]string{
+		"providerId": "codex",
+		"sessionId":  "codex-session-a",
+		"sourcePath": sessionA,
+	})
+	require.NoError(t, err)
+
+	req = httptest.NewRequest("POST", "/api/ai-sessions/delete", bytes.NewReader(deleteBody))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	_, err = os.Stat(sessionA)
+	require.True(t, os.IsNotExist(err))
+
+	batchBody, err := json.Marshal([]map[string]string{
+		{
+			"providerId": "codex",
+			"sessionId":  "codex-session-b",
+			"sourcePath": sessionB,
+		},
+		{
+			"providerId": "codex",
+			"sessionId":  "missing",
+			"sourcePath": filepath.Join(root, "missing.jsonl"),
+		},
+	})
+	require.NoError(t, err)
+
+	req = httptest.NewRequest("POST", "/api/ai-sessions/delete-batch", bytes.NewReader(batchBody))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var outcomes []map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &outcomes))
+	require.Len(t, outcomes, 2)
+	assert.Equal(t, true, outcomes[0]["success"])
+	assert.Equal(t, false, outcomes[1]["success"])
+	_, err = os.Stat(sessionB)
+	require.True(t, os.IsNotExist(err))
+}

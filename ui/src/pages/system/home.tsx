@@ -1,10 +1,10 @@
 import { Home } from "lucide-react";
 import React from "react";
 import { HomePage } from "@/components/home";
+import { registerPage } from "@/pages/registry";
+import type { PageViewProps } from "@/pages/types";
 import { useAppStore } from "@/stores/app-store";
 import { useSessionStore } from "@/stores/session-store";
-import { registerPage } from "../registry";
-import type { PageViewProps } from "../types";
 
 const HomeView: React.FC<PageViewProps> = () => {
   const locale = useAppStore((s) => s.locale);

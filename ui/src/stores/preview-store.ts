@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { FileItem } from "./file-manager-store";
+import type { FileItem } from "@/stores/file-manager-store";
 
 export type PreviewType = "code" | "image" | "video" | "audio" | "pdf" | "markdown" | "unsupported";
 

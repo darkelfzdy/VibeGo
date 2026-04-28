@@ -6,14 +6,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-git/go-git/v6"
-	"github.com/go-git/go-git/v6/plumbing/object"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -31,29 +29,28 @@ func setupGitRepo(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	repo, err := git.PlainInit(dir, false)
+
+	runGit := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %s failed: %s\n%s", args[0], err, string(out))
+		}
+	}
+
+	runGit("init")
+	runGit("config", "user.name", "Test")
+	runGit("config", "user.email", "test@example.com")
+
+	err = os.WriteFile(filepath.Join(dir, "test.txt"), []byte("hello"), 0644)
 	if err != nil {
 		t.Fatal(err)
 	}
-	w, err := repo.Worktree()
-	if err != nil {
-		t.Fatal(err)
-	}
-	filename := filepath.Join(dir, "test.txt")
-	err = os.WriteFile(filename, []byte("hello"), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = w.Add("test.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = w.Commit("initial commit", &git.CommitOptions{
-		Author: &object.Signature{Name: "Test", Email: "test@example.com", When: time.Now()},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+
+	runGit("add", "test.txt")
+	runGit("commit", "-m", "initial commit")
+
 	return dir
 }
 
@@ -84,16 +81,15 @@ func TestGitStatus(t *testing.T) {
 func TestGitLog(t *testing.T) {
 	repoDir := setupGitRepo(t)
 	defer os.RemoveAll(repoDir)
-	wGit, _ := git.PlainOpen(repoDir)
-	wt, _ := wGit.Worktree()
+
 	err := os.WriteFile(filepath.Join(repoDir, "log2.txt"), []byte("log2"), 0644)
 	assert.NoError(t, err)
-	_, err = wt.Add("log2.txt")
-	assert.NoError(t, err)
-	_, err = wt.Commit("second", &git.CommitOptions{
-		Author: &object.Signature{Name: "Test", Email: "test@example.com", When: time.Now()},
-	})
-	assert.NoError(t, err)
+	cmd := exec.Command("git", "add", "log2.txt")
+	cmd.Dir = repoDir
+	assert.NoError(t, cmd.Run())
+	cmd = exec.Command("git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "second")
+	cmd.Dir = repoDir
+	assert.NoError(t, cmd.Run())
 
 	h := NewGitHandler(nil)
 	gin.SetMode(gin.TestMode)
@@ -224,9 +220,10 @@ func TestGitCommit(t *testing.T) {
 	repoDir := setupGitRepo(t)
 	defer os.RemoveAll(repoDir)
 	os.WriteFile(filepath.Join(repoDir, "newfile.txt"), []byte("new"), 0644)
-	wGit, _ := git.PlainOpen(repoDir)
-	wt, _ := wGit.Worktree()
-	wt.Add("newfile.txt")
+
+	cmd := exec.Command("git", "add", "newfile.txt")
+	cmd.Dir = repoDir
+	cmd.Run()
 
 	h := NewGitHandler(nil)
 	gin.SetMode(gin.TestMode)
@@ -252,12 +249,9 @@ func TestGitCommitSelectedOnlyCommitsSelectedFiles(t *testing.T) {
 	err = os.WriteFile(filepath.Join(repoDir, "keep-staged.txt"), []byte("staged only"), 0644)
 	assert.NoError(t, err)
 
-	repo, err := git.PlainOpen(repoDir)
-	assert.NoError(t, err)
-	wt, err := repo.Worktree()
-	assert.NoError(t, err)
-	_, err = wt.Add("keep-staged.txt")
-	assert.NoError(t, err)
+	cmd := exec.Command("git", "add", "keep-staged.txt")
+	cmd.Dir = repoDir
+	assert.NoError(t, cmd.Run())
 
 	h := NewGitHandler(nil)
 	gin.SetMode(gin.TestMode)
@@ -278,33 +272,36 @@ func TestGitCommitSelectedOnlyCommitsSelectedFiles(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	repo, err = git.PlainOpen(repoDir)
-	assert.NoError(t, err)
-	status := collectFileStatus(repo)
+	status := collectFileStatus(repoDir)
 	assert.True(t, containsStatusPath(status, "keep-staged.txt"))
 	assert.False(t, containsStatusPath(status, "test.txt"))
 
-	head, err := repo.Head()
+	logCmd := exec.Command("git", "log", "-1", "--format=%s")
+	logCmd.Dir = repoDir
+	logOut, err := logCmd.Output()
 	assert.NoError(t, err)
-	commit, err := repo.CommitObject(head.Hash())
-	assert.NoError(t, err)
-	assert.Equal(t, "selected only", strings.TrimSpace(commit.Message))
-	_, err = commit.File("test.txt")
-	assert.NoError(t, err)
-	_, err = commit.File("keep-staged.txt")
-	assert.Error(t, err)
+	assert.Equal(t, "selected only", strings.TrimSpace(string(logOut)))
+
+	showCmd := exec.Command("git", "show", "HEAD:test.txt")
+	showCmd.Dir = repoDir
+	assert.NoError(t, showCmd.Run())
+
+	showCmd2 := exec.Command("git", "show", "HEAD:keep-staged.txt")
+	showCmd2.Dir = repoDir
+	assert.Error(t, showCmd2.Run())
 }
 
 func TestGitUndoCommit(t *testing.T) {
 	repoDir := setupGitRepo(t)
 	defer os.RemoveAll(repoDir)
-	wGit, _ := git.PlainOpen(repoDir)
-	wt, _ := wGit.Worktree()
+
 	os.WriteFile(filepath.Join(repoDir, "file2.txt"), []byte("content"), 0644)
-	wt.Add("file2.txt")
-	wt.Commit("second commit", &git.CommitOptions{
-		Author: &object.Signature{Name: "Me", Email: "me@me.com", When: time.Now()},
-	})
+	cmd := exec.Command("git", "add", "file2.txt")
+	cmd.Dir = repoDir
+	cmd.Run()
+	cmd = exec.Command("git", "-c", "user.name=Me", "-c", "user.email=me@me.com", "commit", "-m", "second commit")
+	cmd.Dir = repoDir
+	cmd.Run()
 
 	h := NewGitHandler(nil)
 	gin.SetMode(gin.TestMode)

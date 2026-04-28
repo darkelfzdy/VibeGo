@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React from "react";
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "./drawer";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 
 export interface ContextMenuItem {
   icon: React.ReactNode;

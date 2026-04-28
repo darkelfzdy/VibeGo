@@ -1,6 +1,6 @@
-export { DialogProvider, useDialog } from "./dialog-provider";
-export { default as DirectoryPicker } from "./directory-picker";
-export { default as MobileToolbar } from "./mobile-toolbar";
-export { default as NewPageMenu } from "./new-page-menu";
-export { default as PopupMenuButton } from "./popup-menu-button";
-export { default as ProjectMenu } from "./project-menu";
+export { DialogProvider, useDialog } from "@/components/common/dialog-provider";
+export { default as DirectoryPicker } from "@/components/common/directory-picker";
+export { default as MobileToolbar } from "@/components/common/mobile-toolbar";
+export { default as NewPageMenu } from "@/components/common/new-page-menu";
+export { default as PopupMenuButton } from "@/components/common/popup-menu-button";
+export { default as ProjectMenu } from "@/components/common/project-menu";

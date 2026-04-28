@@ -6,6 +6,7 @@ import path from "node:path";
 const require = createRequire(import.meta.url);
 
 const platformPackageByHost = {
+  "android:arm64": "@vibego/vibego-android-arm64",
   "linux:x64": "@vibego/vibego-linux-x64",
   "linux:arm64": "@vibego/vibego-linux-arm64",
   "darwin:x64": "@vibego/vibego-darwin-x64",

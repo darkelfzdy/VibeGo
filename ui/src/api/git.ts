@@ -1,4 +1,4 @@
-import { API_BASE, request } from "./request";
+import { API_BASE, request } from "@/api/request";
 
 export interface GitCommit {
   hash: string;
@@ -45,6 +45,7 @@ export interface GitDiffLine {
   oldLine: number;
   newLine: number;
   selectable: boolean;
+  selected: boolean;
 }
 
 export interface GitDiffHunk {
@@ -80,12 +81,18 @@ export interface GitInteractiveDiff {
   old: string;
   new: string;
   binary: boolean;
+  includedState: "none" | "partial" | "all";
 }
 
 export interface GitApplySelectionResponse {
   ok: boolean;
   status: GitStructuredStatus;
   diff?: GitInteractiveDiff;
+}
+
+export interface GitApplySelectionBatchResponse {
+  ok: boolean;
+  status: GitStructuredStatus;
 }
 
 export interface GitStashFile {
@@ -141,6 +148,12 @@ export interface BranchInfo {
   isCurrent: boolean;
 }
 
+export interface GitBranchesSnapshot {
+  branches: string[];
+  remoteBranches: string[];
+  currentBranch: string;
+}
+
 export interface CommitSelectedResponse {
   ok: boolean;
   hash?: string;
@@ -166,11 +179,40 @@ export interface SmartSwitchResponse {
   branchStatus: BranchStatusInfo;
 }
 
-export type GitWSEventType = "file_changed" | "remote_updated" | "push_progress" | "pull_progress" | "operation_done";
+export type GitWSEventType =
+  | "snapshot"
+  | "status_changed"
+  | "branch_status_changed"
+  | "branches_changed"
+  | "remotes_changed"
+  | "stashes_changed"
+  | "conflicts_changed"
+  | "draft_changed"
+  | "history_changed"
+  | "push_progress"
+  | "pull_progress"
+  | "operation_done";
+
+export interface GitWSSnapshot {
+  status: GitStructuredStatus;
+  branchStatus: BranchStatusInfo;
+  branches: GitBranchesSnapshot;
+  remotes: RemoteInfo[];
+  stashes: StashEntry[];
+  conflicts: string[];
+  draft: GitDraft;
+  headHash: string;
+}
 
 export interface GitWSEvent {
   type: GitWSEventType;
-  data: Record<string, unknown>;
+  data: unknown;
+}
+
+export interface GitDraft {
+  summary: string;
+  description: string;
+  isAmend: boolean;
 }
 
 export const gitApi = {
@@ -192,10 +234,10 @@ export const gitApi = {
       body: JSON.stringify({ url, path }),
     }),
 
-  status: (path: string) =>
+  status: (path: string, scope?: { workspace_session_id?: string; group_id?: string }) =>
     request<GitStructuredStatus>("/git/status", {
       method: "POST",
-      body: JSON.stringify({ path }),
+      body: JSON.stringify({ path, ...scope }),
     }),
 
   log: (path: string, limit = 20, skip = 0) =>
@@ -210,10 +252,15 @@ export const gitApi = {
       body: JSON.stringify({ path, filePath }),
     }),
 
-  fileDiff: (path: string, filePath: string, mode: "working" | "staged" = "working") =>
+  fileDiff: (
+    path: string,
+    filePath: string,
+    mode: "working" | "staged" = "working",
+    scope?: { workspace_session_id?: string; group_id?: string }
+  ) =>
     request<GitInteractiveDiff>("/git/file-diff", {
       method: "POST",
-      body: JSON.stringify({ path, filePath, mode }),
+      body: JSON.stringify({ path, filePath, mode, ...scope }),
     }),
 
   applySelection: (
@@ -224,11 +271,37 @@ export const gitApi = {
     action: "include" | "exclude" | "discard",
     patchHash: string,
     lineIds: string[],
-    hunkIds: string[]
+    hunkIds: string[],
+    scope?: { workspace_session_id?: string; group_id?: string }
   ) =>
     request<GitApplySelectionResponse>("/git/apply-selection", {
       method: "POST",
-      body: JSON.stringify({ path, filePath, mode, target, action, patchHash, lineIds, hunkIds }),
+      body: JSON.stringify({ path, filePath, mode, target, action, patchHash, lineIds, hunkIds, ...scope }),
+    }),
+
+  applySelectionBatch: (
+    path: string,
+    mode: "working" | "staged",
+    action: "include" | "exclude",
+    filePaths: string[],
+    scope?: { workspace_session_id?: string; group_id?: string }
+  ) =>
+    request<GitApplySelectionBatchResponse>("/git/apply-selection-batch", {
+      method: "POST",
+      body: JSON.stringify({ path, mode, action, filePaths, ...scope }),
+    }),
+
+  getDraft: (path: string, scope?: { workspace_session_id?: string; group_id?: string }) => {
+    const params = new URLSearchParams({ path });
+    if (scope?.workspace_session_id) params.set("workspace_session_id", scope.workspace_session_id);
+    if (scope?.group_id) params.set("group_id", scope.group_id);
+    return request<GitDraft>(`/git/draft?${params.toString()}`);
+  },
+
+  setDraft: (path: string, draft: Partial<GitDraft>, scope?: { workspace_session_id?: string; group_id?: string }) =>
+    request<GitDraft>("/git/draft", {
+      method: "POST",
+      body: JSON.stringify({ path, ...draft, ...scope }),
     }),
 
   show: (path: string, filePath: string, ref = "HEAD") =>
@@ -261,16 +334,30 @@ export const gitApi = {
       body: JSON.stringify({ path, message, author, email }),
     }),
 
-  commitSelected: (path: string, files: string[], patches: { filePath: string; patch: string }[], summary: string, description?: string) =>
+  commitSelected: (
+    path: string,
+    files: string[],
+    patches: { filePath: string; patch: string }[],
+    summary: string,
+    description?: string,
+    scope?: { workspace_session_id?: string; group_id?: string }
+  ) =>
     request<CommitSelectedResponse>("/git/commit-selected", {
       method: "POST",
-      body: JSON.stringify({ path, files, patches, summary, description }),
+      body: JSON.stringify({ path, files, patches, summary, description, ...scope }),
     }),
 
-  amend: (path: string, files: string[], patches: { filePath: string; patch: string }[], summary: string, description?: string) =>
+  amend: (
+    path: string,
+    files: string[],
+    patches: { filePath: string; patch: string }[],
+    summary: string,
+    description?: string,
+    scope?: { workspace_session_id?: string; group_id?: string }
+  ) =>
     request<CommitSelectedResponse>("/git/amend", {
       method: "POST",
-      body: JSON.stringify({ path, files, patches, summary, description }),
+      body: JSON.stringify({ path, files, patches, summary, description, ...scope }),
     }),
 
   undo: (path: string) =>
@@ -428,12 +515,18 @@ export const gitApi = {
       body: JSON.stringify({ path, filePath, mode: "manual", hash: "", manualContent: content }),
     }),
 
-  connectWs: (path: string, onEvent: (event: GitWSEvent) => void): (() => void) => {
+  connectWs: (
+    path: string,
+    onEvent: (event: GitWSEvent) => void,
+    scope?: { workspace_session_id?: string; group_id?: string }
+  ): (() => void) => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
     const key = localStorage.getItem("vibego_auth_key");
     const params = new URLSearchParams({ path });
     if (key) params.set("key", key);
+    if (scope?.workspace_session_id) params.set("workspace_session_id", scope.workspace_session_id);
+    if (scope?.group_id) params.set("group_id", scope.group_id);
     const url = `${protocol}//${host}${API_BASE}/git/ws?${params.toString()}`;
     let ws: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;

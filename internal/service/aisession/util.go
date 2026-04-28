@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const titleMaxChars = 80
+
 func defaultHomeDir() string {
 	home, err := os.UserHomeDir()
 	if err == nil && home != "" {
@@ -139,6 +141,16 @@ func extractTextFromItem(item any) string {
 	if typed == nil {
 		return ""
 	}
+	if asString(typed["type"]) == "tool_use" {
+		name := asString(typed["name"])
+		if name == "" {
+			name = "unknown"
+		}
+		return "[Tool: " + name + "]"
+	}
+	if asString(typed["type"]) == "tool_result" {
+		return extractText(typed["content"])
+	}
 	if text := asString(typed["text"]); text != "" {
 		return text
 	}
@@ -177,6 +189,49 @@ func pathBasename(value string) string {
 		return trimmed
 	}
 	return base
+}
+
+func removeFileIfExists(path string) error {
+	err := os.Remove(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
+}
+
+func removeAllIfExists(path string) error {
+	_, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return os.RemoveAll(path)
+}
+
+func canonicalPath(path string) (string, error) {
+	if path == "" {
+		return "", errors.New("empty path")
+	}
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+		resolved = path
+	}
+	return filepath.Clean(resolved), nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func sortSessions(sessions []SessionMeta) {

@@ -69,3 +69,11 @@ func (s *Store) Clear() error {
 	}
 	return query.Delete(&model.UserSetting{}).Error
 }
+
+func (s *Store) Delete(key string) error {
+	query := s.db.Where("key = ?", key)
+	if s.userID != "" {
+		query = query.Where("user_id = ?", s.userID)
+	}
+	return query.Delete(&model.UserSetting{}).Error
+}

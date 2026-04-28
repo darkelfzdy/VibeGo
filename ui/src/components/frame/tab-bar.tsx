@@ -1,4 +1,4 @@
-import { Box, Edit, Eye, FileDiff, FileText, FolderOpen, GitGraph, Plus, RefreshCw, Terminal, X } from "lucide-react";
+import { Box, Edit, Eye, FileDiff, FileText, FolderOpen, GitGraph, RefreshCw, Terminal, X } from "lucide-react";
 import React, { useCallback, useEffect, useRef } from "react";
 import { useDefaultPageCloseButton } from "@/hooks/use-default-page-close-button";
 import { useTranslation } from "@/lib/i18n";
@@ -7,7 +7,7 @@ import { type TabItem, useFrameStore, type ViewType } from "@/stores/frame-store
 import { getPreviewType, usePreviewStore } from "@/stores/preview-store";
 
 interface TabBarProps {
-  onAction?: () => void;
+  onRefresh?: () => void;
   onBackToList?: () => void;
 }
 
@@ -23,7 +23,7 @@ const TAB_ICONS: Record<string, React.ReactNode> = {
   terminal: <Terminal size={12} />,
 };
 
-const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
+const TabBar: React.FC<TabBarProps> = ({ onRefresh, onBackToList }) => {
   const locale = useAppStore((s) => s.locale);
   const t = useTranslation(locale);
   const activeGroup = useFrameStore((s) => s.getActiveGroup());
@@ -102,9 +102,6 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
     return <FolderOpen size={18} />;
   };
 
-  const isFilesView = activeGroup?.type === "group" && currentView === "files" && activeTabId === null;
-  const isGitView = activeGroup?.type === "group" && currentView === "git";
-  const showRefreshButton = isFilesView || isGitView;
   const showBackButton = activeGroup?.type === "group" || tabs.length > 0;
   const showDefaultCloseButton = !showBackButton && Boolean(defaultCloseButton);
   const showActionButton = activeGroup?.type !== "home" && activeGroup?.type !== "settings";
@@ -191,12 +188,8 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
                 {editMode ? <Eye size={18} /> : <Edit size={18} />}
               </button>
             ) : (
-              <button
-                onClick={onAction}
-                className={cornerButtonClass}
-                title={showRefreshButton ? t("common.refresh") : t("common.new")}
-              >
-                {showRefreshButton ? <RefreshCw size={18} /> : <Plus size={18} />}
+              <button onClick={onRefresh} className={cornerButtonClass} title={t("common.refresh")}>
+                <RefreshCw size={18} />
               </button>
             )}
           </>

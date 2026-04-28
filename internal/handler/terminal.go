@@ -35,7 +35,9 @@ func (h *TerminalHandler) Register(r *gin.RouterGroup) {
 	g := r.Group("/terminal")
 	g.GET("", h.List)
 	g.POST("", h.New)
+	g.POST("/sync-workspace", h.SyncWorkspace)
 	g.POST("/rename", h.Rename)
+	g.POST("/runtime-info", h.UpdateRuntimeInfo)
 	g.POST("/close", h.Close)
 	g.POST("/delete", h.Delete)
 	g.POST("/delete-batch", h.DeleteBatch)
@@ -43,17 +45,29 @@ func (h *TerminalHandler) Register(r *gin.RouterGroup) {
 }
 
 type TerminalInfo struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Shell       string `json:"shell"`
-	Cwd         string `json:"cwd"`
-	Cols        int    `json:"cols"`
-	Rows        int    `json:"rows"`
-	Status      string `json:"status"`
-	ExitCode    int    `json:"exit_code"`
-	HistorySize int64  `json:"history_size"`
-	CreatedAt   int64  `json:"created_at"`
-	UpdatedAt   int64  `json:"updated_at"`
+	ID                  string                        `json:"id"`
+	Name                string                        `json:"name"`
+	Shell               string                        `json:"shell"`
+	Cwd                 string                        `json:"cwd"`
+	CurrentCwd          string                        `json:"current_cwd"`
+	Cols                int                           `json:"cols"`
+	Rows                int                           `json:"rows"`
+	RuntimeType         string                        `json:"runtime_type"`
+	Readonly            bool                          `json:"readonly"`
+	Capabilities        terminal.TerminalCapabilities `json:"capabilities"`
+	Status              string                        `json:"status"`
+	WorkspaceSessionID  string                        `json:"workspace_session_id"`
+	GroupID             string                        `json:"group_id"`
+	ParentID            string                        `json:"parent_id"`
+	ExitCode            int                           `json:"exit_code"`
+	HistorySize         int64                         `json:"history_size"`
+	ShellType           string                        `json:"shell_type"`
+	ShellState          string                        `json:"shell_state"`
+	ShellIntegration    bool                          `json:"shell_integration"`
+	LastCommand         string                        `json:"last_command"`
+	LastCommandExitCode *int                          `json:"last_command_exit_code"`
+	CreatedAt           int64                         `json:"created_at"`
+	UpdatedAt           int64                         `json:"updated_at"`
 }
 
 // List godoc
@@ -64,7 +78,9 @@ type TerminalInfo struct {
 // @Failure 500 {object} map[string]string
 // @Router /api/terminal/list [get]
 func (h *TerminalHandler) List(c *gin.Context) {
-	sessions, err := h.manager.List()
+	workspaceSessionID := c.Query("workspace_session_id")
+	groupID := c.Query("group_id")
+	sessions, err := h.manager.List(workspaceSessionID, groupID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -72,26 +88,43 @@ func (h *TerminalHandler) List(c *gin.Context) {
 	list := make([]TerminalInfo, len(sessions))
 	for i, s := range sessions {
 		list[i] = TerminalInfo{
-			ID:        s.ID,
-			Name:      s.Name,
-			Shell:     s.Shell,
-			Cwd:       s.Cwd,
-			Cols:      s.Cols,
-			Rows:      s.Rows,
-			Status:    s.Status,
-			CreatedAt: s.CreatedAt,
-			UpdatedAt: s.UpdatedAt,
+			ID:                  s.ID,
+			Name:                s.Name,
+			Shell:               s.Shell,
+			Cwd:                 s.Cwd,
+			CurrentCwd:          s.CurrentCwd,
+			Cols:                s.Cols,
+			Rows:                s.Rows,
+			RuntimeType:         s.RuntimeType,
+			Readonly:            s.Readonly,
+			Capabilities:        s.Capabilities,
+			Status:              s.Status,
+			WorkspaceSessionID:  s.WorkspaceSessionID,
+			GroupID:             s.GroupID,
+			ParentID:            s.ParentID,
+			ExitCode:            s.ExitCode,
+			HistorySize:         s.HistorySize,
+			ShellType:           s.ShellType,
+			ShellState:          s.ShellState,
+			ShellIntegration:    s.ShellIntegration,
+			LastCommand:         s.LastCommand,
+			LastCommandExitCode: s.LastCommandExitCode,
+			CreatedAt:           s.CreatedAt,
+			UpdatedAt:           s.UpdatedAt,
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"terminals": list})
 }
 
 type NewTerminalRequest struct {
-	Name   string `json:"name"`
-	Cwd    string `json:"cwd"`
-	Cols   int    `json:"cols"`
-	Rows   int    `json:"rows"`
-	UserID string `json:"user_id"`
+	Name               string `json:"name"`
+	Cwd                string `json:"cwd"`
+	Cols               int    `json:"cols"`
+	Rows               int    `json:"rows"`
+	UserID             string `json:"user_id"`
+	WorkspaceSessionID string `json:"workspace_session_id"`
+	GroupID            string `json:"group_id"`
+	ParentID           string `json:"parent_id"`
 }
 
 // New godoc
@@ -108,11 +141,14 @@ func (h *TerminalHandler) New(c *gin.Context) {
 	c.ShouldBindJSON(&req)
 
 	info, err := h.manager.Create(terminal.CreateOptions{
-		Name:   req.Name,
-		Cwd:    req.Cwd,
-		Cols:   req.Cols,
-		Rows:   req.Rows,
-		UserID: req.UserID,
+		Name:               req.Name,
+		Cwd:                req.Cwd,
+		Cols:               req.Cols,
+		Rows:               req.Rows,
+		UserID:             req.UserID,
+		WorkspaceSessionID: req.WorkspaceSessionID,
+		GroupID:            req.GroupID,
+		ParentID:           req.ParentID,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -125,9 +161,77 @@ type CloseTerminalRequest struct {
 	ID string `json:"id" binding:"required"`
 }
 
+type SyncWorkspaceTerminalRequest struct {
+	ID       string `json:"id" binding:"required"`
+	GroupID  string `json:"group_id"`
+	ParentID string `json:"parent_id"`
+}
+
+type SyncWorkspaceStateRequest struct {
+	TerminalsByGroup       map[string][]WorkspaceTerminalSession `json:"terminalsByGroup"`
+	ActiveTerminalByGroup  map[string]*string                    `json:"activeTerminalByGroup"`
+	ListManagerOpenByGroup map[string]bool                       `json:"listManagerOpenByGroup"`
+	TerminalLayouts        map[string]WorkspaceLayoutNode        `json:"terminalLayouts"`
+	FocusedIDByGroup       map[string]*string                    `json:"focusedIdByGroup"`
+}
+
+type SyncWorkspaceRequest struct {
+	WorkspaceSessionID string                         `json:"workspace_session_id" binding:"required"`
+	Terminals          []SyncWorkspaceTerminalRequest `json:"terminals"`
+	WorkspaceState     *SyncWorkspaceStateRequest     `json:"workspace_state,omitempty"`
+}
+
+func (h *TerminalHandler) SyncWorkspace(c *gin.Context) {
+	var req SyncWorkspaceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	assignments := make([]terminal.WorkspaceTerminalAssignment, 0, len(req.Terminals))
+	for _, item := range req.Terminals {
+		assignments = append(assignments, terminal.WorkspaceTerminalAssignment{
+			ID:       item.ID,
+			GroupID:  item.GroupID,
+			ParentID: item.ParentID,
+		})
+	}
+
+	if err := h.manager.SyncWorkspaceMetadata(req.WorkspaceSessionID, assignments); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.WorkspaceState != nil {
+		_, err := updateSessionWorkspaceState(h.manager.DB(), req.WorkspaceSessionID, WorkspaceStatePatch{
+			TerminalsByGroup:       &req.WorkspaceState.TerminalsByGroup,
+			ActiveTerminalByGroup:  &req.WorkspaceState.ActiveTerminalByGroup,
+			ListManagerOpenByGroup: &req.WorkspaceState.ListManagerOpenByGroup,
+			TerminalLayouts:        &req.WorkspaceState.TerminalLayouts,
+			FocusedIDByGroup:       &req.WorkspaceState.FocusedIDByGroup,
+		})
+		if err != nil && err != gorm.ErrRecordNotFound {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 type RenameTerminalRequest struct {
 	ID   string `json:"id" binding:"required"`
 	Name string `json:"name" binding:"required"`
+}
+
+type UpdateTerminalRuntimeInfoRequest struct {
+	ID                  string  `json:"id" binding:"required"`
+	CurrentCwd          *string `json:"current_cwd,omitempty"`
+	ShellType           *string `json:"shell_type,omitempty"`
+	ShellState          *string `json:"shell_state,omitempty"`
+	ShellIntegration    *bool   `json:"shell_integration,omitempty"`
+	LastCommand         *string `json:"last_command,omitempty"`
+	LastCommandExitCode *int    `json:"last_command_exit_code,omitempty"`
 }
 
 func (h *TerminalHandler) Rename(c *gin.Context) {
@@ -149,6 +253,33 @@ func (h *TerminalHandler) Rename(c *gin.Context) {
 		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (h *TerminalHandler) UpdateRuntimeInfo(c *gin.Context) {
+	var req UpdateTerminalRuntimeInfoRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	err := h.manager.UpdateShellMetadata(req.ID, terminal.ShellMetadataUpdate{
+		CurrentCwd:          req.CurrentCwd,
+		ShellType:           req.ShellType,
+		ShellState:          req.ShellState,
+		ShellIntegration:    req.ShellIntegration,
+		LastCommand:         req.LastCommand,
+		LastCommandExitCode: req.LastCommandExitCode,
+	})
+	if err != nil {
+		status := http.StatusInternalServerError
+		if err == terminal.ErrTerminalNotFound {
+			status = http.StatusNotFound
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 

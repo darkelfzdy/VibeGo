@@ -1,5 +1,12 @@
-import type { AIListResponse, AIMessagesResponse, AIOverviewResponse, AISessionConfig } from "@/types/ai-session";
-import { request } from "./request";
+import { request } from "@/api/request";
+import type {
+  AIDeleteOutcome,
+  AIDeleteRequest,
+  AIListResponse,
+  AIMessagesResponse,
+  AIOverviewResponse,
+  AISessionConfig,
+} from "@/types/ai-session";
 
 export const aiSessionApi = {
   overview: () => request<AIOverviewResponse>("/ai-sessions/overview"),
@@ -15,6 +22,18 @@ export const aiSessionApi = {
     request<AIMessagesResponse>("/ai-sessions/messages", {
       method: "POST",
       body: JSON.stringify({ providerId, sourcePath }),
+    }),
+
+  delete: (item: AIDeleteRequest) =>
+    request<{ ok: boolean }>("/ai-sessions/delete", {
+      method: "POST",
+      body: JSON.stringify(item),
+    }),
+
+  deleteMany: (items: AIDeleteRequest[]) =>
+    request<AIDeleteOutcome[]>("/ai-sessions/delete-batch", {
+      method: "POST",
+      body: JSON.stringify(items),
     }),
 
   getConfig: () => request<AISessionConfig>("/ai-sessions/config"),

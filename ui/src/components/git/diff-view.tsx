@@ -1,7 +1,8 @@
-import { Square, SquareCheck, SquareMinus } from "lucide-react";
-import React, { useMemo } from "react";
+import { Loader2, Square, SquareCheck, SquareMinus } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import type { GitInteractiveDiff } from "@/api/git";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { type GitDiffHunk, type GitDiffRow, type GitSelectionType, parseGitDiff } from "@/lib/git-diff";
+import { type GitParsedDiff, type GitSelectionType, parseGitDiff } from "@/lib/git-diff";
 import { useGitStore } from "@/stores";
 
 interface DiffViewProps {
@@ -13,6 +14,23 @@ interface DiffViewProps {
   repoPath?: string;
   language?: string;
   allowSelection?: boolean;
+}
+
+interface DisplayRow {
+  id: string;
+  type: "context" | "added" | "removed";
+  content: string;
+  oldLineNumber: number | null;
+  newLineNumber: number | null;
+  selectable: boolean;
+  selected: boolean;
+}
+
+interface DisplayHunk {
+  id: string;
+  header: string;
+  rows: DisplayRow[];
+  selectableRowIds: string[];
 }
 
 const getLanguageFromFilename = (filename?: string): string => {
@@ -71,11 +89,45 @@ const getSelectionIcon = (selectionType: GitSelectionType, size: number, classNa
   return <Square size={size} className={className} />;
 };
 
-const getHunkSelectionType = (hunk: GitDiffHunk, selectedRowIds: Set<string>): GitSelectionType => {
+const mapParsedDiffToDisplay = (parsedDiff: GitParsedDiff): DisplayHunk[] =>
+  parsedDiff.hunks.map((hunk) => ({
+    id: hunk.id,
+    header: hunk.header,
+    selectableRowIds: hunk.selectableRowIds,
+    rows: hunk.rows
+      .filter((row) => row.type !== "hunk")
+      .map((row) => ({
+        id: row.id,
+        type: row.type === "added" ? "added" : row.type === "removed" ? "removed" : "context",
+        content: row.content,
+        oldLineNumber: row.oldLineNumber,
+        newLineNumber: row.newLineNumber,
+        selectable: row.selectable,
+        selected: false,
+      })),
+  }));
+
+const mapInteractiveDiffToDisplay = (diff: GitInteractiveDiff): DisplayHunk[] =>
+  diff.hunks.map((hunk) => ({
+    id: hunk.id,
+    header: hunk.header,
+    selectableRowIds: hunk.lines.filter((line) => line.selectable).map((line) => line.id),
+    rows: hunk.lines.map((line) => ({
+      id: line.id,
+      type: line.kind === "add" ? "added" : line.kind === "del" ? "removed" : "context",
+      content: line.content,
+      oldLineNumber: line.oldLine > 0 ? line.oldLine : null,
+      newLineNumber: line.newLine > 0 ? line.newLine : null,
+      selectable: line.selectable,
+      selected: line.selected,
+    })),
+  }));
+
+const getHunkSelectionType = (hunk: DisplayHunk): GitSelectionType => {
   if (hunk.selectableRowIds.length === 0) {
     return "none";
   }
-  const selectedCount = hunk.selectableRowIds.filter((rowId) => selectedRowIds.has(rowId)).length;
+  const selectedCount = hunk.rows.filter((row) => row.selectable && row.selected).length;
   if (selectedCount === 0) {
     return "none";
   }
@@ -85,14 +137,14 @@ const getHunkSelectionType = (hunk: GitDiffHunk, selectedRowIds: Set<string>): G
   return "partial";
 };
 
-const getRowSelectionType = (row: GitDiffRow, selectedRowIds: Set<string>): GitSelectionType => {
+const getRowSelectionType = (row: DisplayRow): GitSelectionType => {
   if (!row.selectable) {
     return "none";
   }
-  return selectedRowIds.has(row.id) ? "all" : "none";
+  return row.selected ? "all" : "none";
 };
 
-const getSelectionSurfaceClassName = (row: GitDiffRow, selected: boolean, interactive: boolean) => {
+const getSelectionSurfaceClassName = (row: DisplayRow, selected: boolean, interactive: boolean) => {
   if (row.type === "added") {
     if (!interactive) {
       return "bg-green-500/20";
@@ -108,7 +160,7 @@ const getSelectionSurfaceClassName = (row: GitDiffRow, selected: boolean, intera
   return interactive ? "bg-ide-bg hover:bg-ide-panel/40" : "bg-ide-bg";
 };
 
-const getSelectionClassName = (row: GitDiffRow, selected: boolean, interactive: boolean) => {
+const getSelectionClassName = (row: DisplayRow, selected: boolean, interactive: boolean) => {
   const surfaceClassName = getSelectionSurfaceClassName(row, selected, interactive);
   if (row.type === "added" || row.type === "removed") {
     if (!interactive) {
@@ -128,62 +180,89 @@ const DiffView: React.FC<DiffViewProps> = ({
   language,
   allowSelection = false,
 }) => {
-  const checkedFiles = useGitStore(groupId, (state) => state.checkedFiles);
-  const partialSelection = useGitStore(groupId, (state) => (filePath ? state.partialSelections[filePath] : undefined));
-  const setPartialSelection = useGitStore(groupId, (state) => state.setPartialSelection);
-  const toggleFile = useGitStore(groupId, (state) => state.toggleFile);
+  const getInteractiveDiff = useGitStore(groupId, (state) => state.getInteractiveDiff);
+  const applySelection = useGitStore(groupId, (state) => state.applySelection);
+  const interactiveDiff = useGitStore(groupId, (state) => (filePath ? state.interactiveDiffs[filePath] : undefined));
   const isMobile = useIsMobile();
+  const [isLoading, setIsLoading] = useState(false);
 
   const detectedLanguage = useMemo(() => language || getLanguageFromFilename(filename), [language, filename]);
   const parsedDiff = useMemo(() => parseGitDiff(original, modified), [original, modified]);
+  const interactive = allowSelection && Boolean(filePath);
+
+  useEffect(() => {
+    if (!interactive || !filePath) {
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoading(true);
+
+    void getInteractiveDiff(filePath, "working").finally(() => {
+      if (!cancelled) {
+        setIsLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [interactive, filePath, getInteractiveDiff]);
+
+  const displayHunks = useMemo(
+    () =>
+      interactive && interactiveDiff
+        ? mapInteractiveDiffToDisplay(interactiveDiff)
+        : mapParsedDiffToDisplay(parsedDiff),
+    [interactive, interactiveDiff, parsedDiff]
+  );
+
   const diffStats = useMemo(() => {
-    const rows = parsedDiff.hunks.flatMap((hunk) => hunk.rows);
+    if (interactive && interactiveDiff) {
+      return {
+        added: interactiveDiff.stats.added,
+        removed: interactiveDiff.stats.deleted,
+      };
+    }
+
+    const rows = displayHunks.flatMap((hunk) => hunk.rows);
     return {
       added: rows.filter((row) => row.type === "added").length,
       removed: rows.filter((row) => row.type === "removed").length,
     };
-  }, [parsedDiff]);
+  }, [displayHunks, interactive, interactiveDiff]);
 
-  const interactive = allowSelection && Boolean(filePath);
   const fileSelectionType = useMemo<GitSelectionType>(() => {
-    if (!interactive || !filePath) {
+    if (!interactive || !interactiveDiff) {
       return "none";
     }
-    if (partialSelection) {
-      return "partial";
-    }
-    return checkedFiles.has(filePath) ? "all" : "none";
-  }, [checkedFiles, filePath, interactive, partialSelection]);
+    return interactiveDiff.includedState;
+  }, [interactive, interactiveDiff]);
 
-  const selectedRowIds = useMemo(() => {
-    if (!interactive || !filePath) {
-      return new Set<string>();
-    }
-    if (partialSelection) {
-      return new Set(partialSelection.selectedRowIds);
-    }
-    if (checkedFiles.has(filePath)) {
-      return new Set(parsedDiff.selectableRowIds);
-    }
-    return new Set<string>();
-  }, [checkedFiles, filePath, interactive, parsedDiff.selectableRowIds, partialSelection]);
+  const selectedRowCount = useMemo(
+    () => displayHunks.flatMap((hunk) => hunk.rows).filter((row) => row.selectable && row.selected).length,
+    [displayHunks]
+  );
+  const selectableRowCount = useMemo(
+    () => displayHunks.flatMap((hunk) => hunk.rows).filter((row) => row.selectable).length,
+    [displayHunks]
+  );
 
   const maxMobileContentColumns = useMemo(() => {
     if (!isMobile) {
       return 0;
     }
-    const lineLengths = parsedDiff.hunks.flatMap((hunk) => [
+    const lineLengths = displayHunks.flatMap((hunk) => [
       hunk.header.length,
       ...hunk.rows.map((row) => row.content.length + 2),
     ]);
     return Math.max(24, ...lineLengths);
-  }, [isMobile, parsedDiff.hunks]);
+  }, [isMobile, displayHunks]);
 
   const diffContentWrapperClassName = isMobile ? "min-w-full" : "";
   const diffContentWrapperStyle = isMobile ? { minWidth: `calc(${maxMobileContentColumns}ch + 60px)` } : undefined;
-  const diffRowClassName = isMobile
-    ? `w-full flex items-stretch transition-colors ${interactive ? "text-left" : "select-text"}`
-    : `w-full flex items-stretch transition-colors ${interactive ? "text-left" : "select-text"}`;
+  const diffRowClassName = `w-full flex items-stretch transition-colors ${interactive ? "text-left" : "select-text"}`;
   const diffLeftPaneOuterClassName = isMobile
     ? "sticky left-0 z-10 flex shrink-0 self-stretch border-r border-ide-border bg-ide-bg bg-opacity-100"
     : "sticky left-0 z-10 flex shrink-0 self-stretch border-r border-ide-border/50 bg-ide-bg bg-opacity-100";
@@ -207,43 +286,27 @@ const DiffView: React.FC<DiffViewProps> = ({
     : "flex-1 overflow-auto font-mono text-xs";
   const hunkHeaderClassName = isMobile
     ? `w-full flex items-stretch bg-ide-panel border-b border-ide-border sticky top-0 z-20 ${interactive ? "cursor-pointer" : ""}`
-    : `w-full flex items-stretch bg-ide-panel border-b border-ide-border/50 sticky top-0 z-20 ${interactive && !isMobile ? "cursor-pointer hover:bg-ide-panel/80" : ""}`;
+    : `w-full flex items-stretch bg-ide-panel border-b border-ide-border/50 sticky top-0 z-20 ${interactive ? "cursor-pointer hover:bg-ide-panel/80" : ""}`;
   const hunkHeaderLeftClassName = isMobile
     ? "sticky left-0 z-20 flex shrink-0 self-stretch items-center gap-0 border-r border-ide-border bg-ide-panel px-0.5"
     : "sticky left-0 z-20 flex shrink-0 self-stretch items-center gap-2 border-r border-ide-border/50 bg-ide-panel pl-2 pr-2 py-1";
-  const hunkHeaderTextClassName = isMobile 
-    ? "px-2 py-0.75 text-[11px] text-ide-accent flex items-center" 
+  const hunkHeaderTextClassName = isMobile
+    ? "px-2 py-0.75 text-[11px] text-ide-accent flex items-center"
     : "px-2 py-1 text-[11px] text-ide-accent flex items-center";
 
-  const handleRowToggle = (rowId: string) => {
-    if (!interactive || !filePath) {
+  const runSelectionAction = async (
+    target: "line" | "hunk" | "file",
+    action: "include" | "exclude" | "discard",
+    lineIds: string[],
+    hunkIds: string[]
+  ) => {
+    if (!interactive || !filePath || !interactiveDiff) {
       return;
     }
-    const nextSelectedRowIds = new Set(selectedRowIds);
-    if (nextSelectedRowIds.has(rowId)) {
-      nextSelectedRowIds.delete(rowId);
-    } else {
-      nextSelectedRowIds.add(rowId);
-    }
-    setPartialSelection(filePath, Array.from(nextSelectedRowIds), parsedDiff.selectableRowIds);
-  };
 
-  const handleHunkToggle = (hunk: GitDiffHunk) => {
-    if (!interactive || !filePath || hunk.selectableRowIds.length === 0) {
-      return;
-    }
-    const nextSelectedRowIds = new Set(selectedRowIds);
-    const hunkSelectionType = getHunkSelectionType(hunk, selectedRowIds);
-    if (hunkSelectionType === "none") {
-      for (const rowId of hunk.selectableRowIds) {
-        nextSelectedRowIds.add(rowId);
-      }
-    } else {
-      for (const rowId of hunk.selectableRowIds) {
-        nextSelectedRowIds.delete(rowId);
-      }
-    }
-    setPartialSelection(filePath, Array.from(nextSelectedRowIds), parsedDiff.selectableRowIds);
+    setIsLoading(true);
+    await applySelection(filePath, "working", target, action, interactiveDiff.patchHash, lineIds, hunkIds);
+    setIsLoading(false);
   };
 
   return (
@@ -255,9 +318,8 @@ const DiffView: React.FC<DiffViewProps> = ({
               type="button"
               className="shrink-0"
               onClick={() => {
-                if (filePath) {
-                  toggleFile(filePath);
-                }
+                const action = fileSelectionType === "none" ? "include" : "exclude";
+                void runSelectionAction("file", action, [], []);
               }}
             >
               {getSelectionIcon(
@@ -281,24 +343,32 @@ const DiffView: React.FC<DiffViewProps> = ({
         </div>
         {interactive && (
           <div className="text-[10px] text-ide-mute shrink-0">
-            {selectedRowIds.size}/{parsedDiff.selectableRowIds.length}
+            {selectedRowCount}/{selectableRowCount}
           </div>
         )}
       </div>
 
       <div className={diffBodyClassName} style={isMobile ? { overscrollBehaviorX: "contain" } : undefined}>
-        {parsedDiff.hunks.length === 0 ? (
+        {isLoading && interactive && !interactiveDiff ? (
+          <div className="h-full flex items-center justify-center text-ide-mute gap-2">
+            <Loader2 size={14} className="animate-spin" />
+            Loading diff
+          </div>
+        ) : displayHunks.length === 0 ? (
           <div className="h-full flex items-center justify-center text-ide-mute">No changes</div>
         ) : (
           <div className={diffContentWrapperClassName} style={diffContentWrapperStyle}>
-            {parsedDiff.hunks.map((hunk) => (
+            {displayHunks.map((hunk) => (
               <div key={hunk.id} className="border-b border-ide-border/60 last:border-b-0">
                 <div
                   className={hunkHeaderClassName}
                   onClick={() => {
-                    if (interactive) {
-                      handleHunkToggle(hunk);
+                    if (!interactive) {
+                      return;
                     }
+                    const hunkSelectionType = getHunkSelectionType(hunk);
+                    const action = hunkSelectionType === "none" ? "include" : "exclude";
+                    void runSelectionAction("hunk", action, [], [hunk.id]);
                   }}
                 >
                   <div className={hunkHeaderLeftClassName}>
@@ -309,61 +379,61 @@ const DiffView: React.FC<DiffViewProps> = ({
                   <span className={hunkHeaderTextClassName}>{hunk.header}</span>
                 </div>
 
-                {hunk.rows
-                  .filter((row) => row.type !== "hunk")
-                  .map((row) => {
-                    const rowSelectionType = getRowSelectionType(row, selectedRowIds);
-                    const selected = rowSelectionType === "all";
-                    const rowContent = (
-                      <>
-                        <div className={diffLeftPaneOuterClassName}>
-                          <div
-                            className={`${diffLeftPaneInnerClassName} ${getSelectionSurfaceClassName(row, selected, interactive)}`}
-                          >
-                            <span className={diffCheckboxClassName}>
-                              {interactive && row.selectable
-                                ? getSelectionIcon(rowSelectionType, 13, selected ? "text-ide-accent" : "text-ide-mute")
-                                : null}
-                            </span>
-                            <span className={diffLineNumberClassName}>{row.oldLineNumber ?? ""}</span>
-                            <span className={diffLineNumberClassName}>{row.newLineNumber ?? ""}</span>
-                          </div>
-                        </div>
-                        <span className={diffContentClassName}>
-                          <span className={diffPrefixClassName}>
-                            {row.type === "added" ? "+" : row.type === "removed" ? "-" : " "}
-                          </span>
-                          <span>{row.content || " "}</span>
-                        </span>
-                      </>
-                    );
-
-                    if (interactive) {
-                      return (
-                        <button
-                          type="button"
-                          key={row.id}
-                          className={`${diffRowClassName} ${getSelectionClassName(row, selected, interactive)}`}
-                          onClick={() => {
-                            if (row.selectable) {
-                              handleRowToggle(row.id);
-                            }
-                          }}
+                {hunk.rows.map((row) => {
+                  const rowSelectionType = getRowSelectionType(row);
+                  const selected = rowSelectionType === "all";
+                  const rowContent = (
+                    <>
+                      <div className={diffLeftPaneOuterClassName}>
+                        <div
+                          className={`${diffLeftPaneInnerClassName} ${getSelectionSurfaceClassName(row, selected, interactive)}`}
                         >
-                          {rowContent}
-                        </button>
-                      );
-                    }
+                          <span className={diffCheckboxClassName}>
+                            {interactive && row.selectable
+                              ? getSelectionIcon(rowSelectionType, 13, selected ? "text-ide-accent" : "text-ide-mute")
+                              : null}
+                          </span>
+                          <span className={diffLineNumberClassName}>{row.oldLineNumber ?? ""}</span>
+                          <span className={diffLineNumberClassName}>{row.newLineNumber ?? ""}</span>
+                        </div>
+                      </div>
+                      <span className={diffContentClassName}>
+                        <span className={diffPrefixClassName}>
+                          {row.type === "added" ? "+" : row.type === "removed" ? "-" : " "}
+                        </span>
+                        <span>{row.content || " "}</span>
+                      </span>
+                    </>
+                  );
 
+                  if (interactive) {
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={row.id}
                         className={`${diffRowClassName} ${getSelectionClassName(row, selected, interactive)}`}
+                        onClick={() => {
+                          if (!row.selectable) {
+                            return;
+                          }
+                          const action = selected ? "exclude" : "include";
+                          void runSelectionAction("line", action, [row.id], []);
+                        }}
                       >
                         {rowContent}
-                      </div>
+                      </button>
                     );
-                  })}
+                  }
+
+                  return (
+                    <div
+                      key={row.id}
+                      className={`${diffRowClassName} ${getSelectionClassName(row, selected, interactive)}`}
+                    >
+                      {rowContent}
+                    </div>
+                  );
+                })}
               </div>
             ))}
           </div>

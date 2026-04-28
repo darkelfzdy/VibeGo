@@ -1,0 +1,355 @@
+.tk-keyboard {
+  --tk-bg: var(--ide-bg);
+  --tk-key-bg: var(--ide-panel);
+  --tk-key-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  --tk-fn-key-bg: var(--ide-border);
+  --tk-key-pressed: color-mix(in srgb, var(--ide-border) 80%, black);
+  --tk-fn-key-pressed: color-mix(in srgb, var(--ide-mute) 80%, black);
+  --tk-key-radius: 5px;
+  --tk-text: var(--ide-text);
+  --tk-text-sub: var(--ide-mute);
+  --tk-text-sub-highlight: var(--ide-text);
+  --tk-mod-latched-bg: var(--ide-accent);
+  --tk-mod-latched-text: var(--ide-on-accent, #ffffff);
+  --tk-mod-locked-bg: var(--ide-diff-add);
+  --tk-mod-locked-text: #ffffff;
+  --tk-gap-x: 6px;
+  --tk-gap-y: 8px;
+  --tk-row-height: 42px;
+  --tk-font-main: 17px;
+  --tk-font-main-small: 13px;
+  --tk-font-sub: 10px;
+  --tk-side-pad: 4px;
+  --tk-font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --tk-swipe-preview-bg: color-mix(in srgb, var(--ide-accent) 20%, transparent);
+  --tk-unit: calc((100% - var(--tk-side-pad) * 2 - var(--tk-gap-x) * 9) / 10);
+}
+
+.tk-keyboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tk-gap-y);
+  padding: 10px var(--tk-side-pad) 8px;
+  background: var(--tk-bg);
+  font-family: var(--tk-font-family);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tk-row {
+  display: flex;
+  gap: var(--tk-gap-x);
+  justify-content: center;
+}
+
+.tk-key {
+  position: relative;
+  display: grid;
+  grid-template: 1fr 1.4fr 1fr / 1fr 1.4fr 1fr;
+  align-items: center;
+  justify-items: center;
+  flex: none;
+  width: calc(var(--tk-unit) * var(--key-flex, 1) + var(--tk-gap-x) * (var(--key-flex, 1) - 1));
+  height: var(--tk-row-height);
+  background: var(--tk-key-bg);
+  border: none;
+  border-radius: var(--tk-key-radius);
+  box-shadow: var(--tk-key-shadow);
+  color: var(--tk-text);
+  font-family: var(--tk-font-family);
+  cursor: pointer;
+  padding: 2px;
+  box-sizing: border-box;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.08s;
+  min-width: 0;
+}
+
+.tk-key::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--tk-gap-y) * -0.5);
+  bottom: calc(var(--tk-gap-y) * -0.5);
+  left: calc(var(--tk-gap-x) * -0.5);
+  right: calc(var(--tk-gap-x) * -0.5);
+  z-index: 10;
+}
+
+.tk-key--fn {
+  background: var(--tk-fn-key-bg);
+}
+
+.tk-key--pressed {
+  background: var(--tk-key-pressed);
+}
+
+.tk-key--fn.tk-key--pressed {
+  background: var(--tk-fn-key-pressed);
+}
+
+.tk-key--latched {
+  background: var(--tk-key-bg) !important;
+  color: var(--tk-text);
+}
+
+.tk-key--locked {
+  background: var(--tk-key-bg) !important;
+  color: var(--tk-text);
+}
+
+
+.tk-key--latched .tk-sub,
+.tk-key--locked .tk-sub {
+  color: var(--tk-text-sub);
+}
+
+.tk-label {
+  grid-area: 2 / 2;
+  font-size: var(--tk-font-main);
+  font-weight: 400;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.tk-label--small {
+  font-size: var(--tk-font-main-small);
+}
+
+.tk-sub {
+  font-size: var(--tk-font-sub);
+  color: var(--tk-text-sub);
+  line-height: 1;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: color 0.1s, font-size 0.1s;
+}
+
+.tk-sub--long {
+  font-size: calc(var(--tk-font-sub) - 2px);
+  letter-spacing: -0.5px;
+}
+
+.tk-sub--highlight {
+  color: var(--tk-text-sub-highlight);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tk-sub--nw { grid-area: 1 / 1; align-self: start; justify-self: start; padding: 1px 0 0 2px; }
+.tk-sub--n  { grid-area: 1 / 2; align-self: start; }
+.tk-sub--ne { grid-area: 1 / 3; align-self: start; justify-self: end; padding: 1px 2px 0 0; }
+.tk-sub--w  { grid-area: 2 / 1; justify-self: start; padding-left: 2px; }
+.tk-sub--e  { grid-area: 2 / 3; justify-self: end; padding-right: 2px; }
+.tk-sub--sw { grid-area: 3 / 1; align-self: end; justify-self: start; padding: 0 0 1px 2px; }
+.tk-sub--s  { grid-area: 3 / 2; align-self: end; }
+.tk-sub--se { grid-area: 3 / 3; align-self: end; justify-self: end; padding: 0 2px 1px 0; }
+
+.tk-sub-button {
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tk-text-sub);
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tk-sub-button:active {
+  color: var(--tk-text);
+}
+
+.tk-swipe-preview {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(calc(-50% + var(--shift, 0px)));
+  width: 100%;
+  height: 280%;
+  pointer-events: none;
+  z-index: 50;
+  display: grid;
+  grid-template-rows: 55% 45%;
+  justify-items: center;
+  color: var(--tk-text);
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+}
+
+.tk-swipe-preview__content {
+  grid-row: 1;
+  align-self: stretch;
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: max-content;
+  min-width: calc(100% + 12px);
+  max-width: min(140px, calc(100vw - 24px));
+  padding: 0 12px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  background: var(--tk-key-bg);
+  font-size: 32px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.tk-swipe-preview__content--compact {
+  font-size: 28px;
+}
+
+.tk-swipe-preview__content svg {
+  width: 26px;
+  height: 26px;
+}
+
+.tk-swipe-preview::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 50%;
+  transform: translateX(calc(-1 * var(--shift, 0px)));
+  background: var(--tk-key-bg);
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  border-bottom-left-radius: var(--tk-key-radius);
+  border-bottom-right-radius: var(--tk-key-radius);
+  z-index: -1;
+}
+
+.tk-key[data-edge="left"] {
+  --shift: 13px;
+}
+
+.tk-key[data-edge="right"] {
+  --shift: -13px;
+}
+
+.tk-key--space .tk-label {
+  font-size: 0;
+}
+
+.tk-key--space {
+  position: relative;
+}
+
+.tk-key--space .tk-sub {
+  grid-area: 1 / 1 / -1 / -1;
+  align-self: center;
+  justify-self: center;
+  font-size: 0;
+  color: var(--tk-text-sub);
+  padding: 0;
+}
+
+.tk-key--space .tk-sub svg {
+  width: 18px;
+  height: 18px;
+}
+
+.tk-voice-picker {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+  display: grid;
+  grid-template-columns: 44px 48px 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 8px;
+  background: var(--tk-key-bg);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  pointer-events: none;
+}
+
+.tk-voice-choice,
+.tk-voice-live {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  border-radius: 6px;
+  color: var(--tk-text);
+}
+
+.tk-voice-choice {
+  background: color-mix(in srgb, var(--ide-border) 65%, transparent);
+}
+
+.tk-voice-live {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.tk-voice-picker[data-target="cancel"] .tk-voice-choice--cancel {
+  color: #ffffff;
+  background: #ef4444;
+}
+
+.tk-voice-picker[data-target="commit"] .tk-voice-choice--commit {
+  color: var(--tk-mod-latched-text);
+  background: var(--tk-mod-latched-bg);
+}
+
+.tk-row--short {
+  height: calc(var(--tk-row-height) * 0.85);
+}
+
+.tk-row--short .tk-key {
+  height: calc(var(--tk-row-height) * 0.85);
+}
+
+.tk-row--tall .tk-key {
+  height: calc(var(--tk-row-height) * 1.05);
+}
+
+.tk-speech-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.tk-speech-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: tk-pulse 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.tk-speech-text {
+  font-size: 12px;
+  color: #ef4444;
+  font-weight: 500;
+}
+
+@keyframes tk-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.8); }
+}
+
+.tk-keyboard--recording .tk-key .tk-label,
+.tk-keyboard--recording .tk-key .tk-sub {
+  opacity: 0;
+}

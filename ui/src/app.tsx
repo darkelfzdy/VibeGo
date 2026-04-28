@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { authApi } from "@/api/auth";
-import { getStoredAuthKey, LoginPage, setStoredAuthKey } from "@/components/login-page";
 import { fileApi } from "@/api/file";
-import { DirectoryPicker, NewPageMenu, ProjectMenu, useDialog } from "@/components/common";
+import { DirectoryPicker, NewPageMenu, ProjectMenu } from "@/components/common";
 import { AppFrame, NewGroupMenu } from "@/components/frame";
+import { getStoredAuthKey, LoginPage, setStoredAuthKey } from "@/components/login-page";
 import { Toaster } from "@/components/ui/sonner";
 import { useTranslation } from "@/lib/i18n";
 import { useSettingsStore } from "@/lib/settings";
 import { pageRegistry } from "@/pages/registry";
+import { shouldBlockTerminalBrowserUnload } from "@/services/terminal-browser-shortcut-guard";
 import { initTerminalCleanup } from "@/services/terminal-cleanup-service";
 import {
   getOrCreateFileManagerStore,
@@ -19,11 +20,11 @@ import {
   useSessionStore,
 } from "@/stores";
 import type { GenericGroup, ToolGroup } from "@/stores/frame-store";
+import * as gitStoreModule from "@/stores/git-store";
 import "@/pages";
 
 const App: React.FC = () => {
   const { theme, locale, isMenuOpen, setMenuOpen, setTheme, setLocale } = useAppStore();
-  const dialog = useDialog();
   const t = useTranslation(locale);
 
   const [authChecked, setAuthChecked] = useState(false);
@@ -38,8 +39,6 @@ const App: React.FC = () => {
   const activeGroup = useFrameStore((s) => s.getActiveGroup());
   const currentPage = useFrameStore((s) => s.getCurrentPage());
   const activeTabId = useFrameStore((s) => s.getCurrentActiveTabId());
-  const tabs = useFrameStore((s) => s.getCurrentTabs());
-  const addCurrentTab = useFrameStore((s) => s.addCurrentTab);
   const addToolGroup = useFrameStore((s) => s.addToolGroup);
   const addTerminalGroup = useFrameStore((s) => s.addTerminalGroup);
   const addSettingsGroup = useFrameStore((s) => s.addSettingsGroup);
@@ -48,6 +47,7 @@ const App: React.FC = () => {
 
   const openFolder = useSessionStore((s) => s.openFolder);
   const saveCurrentSession = useSessionStore((s) => s.saveCurrentSession);
+  const refreshCurrentSession = useSessionStore((s) => s.refreshCurrentSession);
 
   const [isNewGroupMenuOpen, setNewGroupMenuOpen] = useState(false);
   const [isNewPageMenuOpen, setNewPageMenuOpen] = useState(false);
@@ -101,12 +101,36 @@ const App: React.FC = () => {
   }, [initSession, initDefaultGroups, authChecked, needLogin]);
 
   useEffect(() => {
-    const handleBeforeUnload = () => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       saveCurrentSession();
+      if (shouldBlockTerminalBrowserUnload()) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [saveCurrentSession]);
+
+  useEffect(() => {
+    if (!authChecked || needLogin) return;
+
+    const handleFocus = () => {
+      void refreshCurrentSession();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshCurrentSession();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [authChecked, needLogin, refreshCurrentSession]);
 
   useEffect(() => {
     if (themeSetting) setTheme(themeSetting as Theme);
@@ -159,62 +183,55 @@ const App: React.FC = () => {
     resetPreview();
   }, [resetPreview]);
 
-  const handleTabAction = useCallback(async () => {
+  const handleRefresh = useCallback(async () => {
     if (!activeGroup) return;
 
     if (activeGroup.type === "group") {
       const pageType = currentPage?.type;
       switch (pageType) {
-        case "files":
-          if (activeTabId === null) {
-            const storeApi = getOrCreateFileManagerStore(activeGroup.id);
-            storeApi.getState().setLoading(true);
-            const path = storeApi.getState().currentPath;
-            try {
-              const res = await fileApi.list(path);
-              const files = res.files.map((f) => ({
-                path: f.path,
-                name: f.name,
-                size: f.size,
-                isDir: f.isDir,
-                isSymlink: f.isSymlink,
-                isHidden: f.isHidden,
-                mode: f.mode,
-                mimeType: f.mimeType,
-                modTime: f.modTime,
-                extension: f.extension,
-              }));
-              storeApi.getState().setFiles(files);
-            } finally {
-              storeApi.getState().setLoading(false);
-            }
-          } else {
-            const storeApi = getOrCreateFileManagerStore(activeGroup.id);
-            const currentPath = storeApi.getState().currentPath;
-            const newPath = await dialog.prompt(t("dialog.newFileName"), { placeholder: t("dialog.enterFileName") });
-            if (newPath) {
-              await fileApi.create({
-                path: `${currentPath}/${newPath}`,
-                isDir: false,
-              });
-            }
+        case "files": {
+          const storeApi = getOrCreateFileManagerStore(activeGroup.id);
+          storeApi.getState().setLoading(true);
+          const path = storeApi.getState().currentPath;
+          try {
+            const res = await fileApi.list(path);
+            const files = (res.files ?? []).map((f) => ({
+              path: f.path,
+              name: f.name,
+              size: f.size,
+              isDir: f.isDir,
+              isSymlink: f.isSymlink,
+              isHidden: f.isHidden,
+              mode: f.mode,
+              mimeType: f.mimeType,
+              modTime: f.modTime,
+              extension: f.extension,
+            }));
+            storeApi.getState().setFiles(files);
+          } finally {
+            storeApi.getState().setLoading(false);
           }
           break;
+        }
+        case "git": {
+          const gitStore = gitStoreModule.getOrCreateGitStore(activeGroup.id);
+          const state = gitStore.getState();
+          await Promise.allSettled([
+            state.fetchStatus(),
+            state.fetchBranches(),
+            state.fetchBranchStatus(),
+            state.fetchRemotes(),
+            state.fetchStashes(),
+            state.fetchConflicts(),
+            state.fetchLog(),
+          ]);
+          break;
+        }
         case "terminal":
           break;
-        case "git":
-          break;
       }
-    } else if (activeGroup.type === "tool") {
-      const page = pageRegistry.get(activeGroup.pageId);
-      const title = page?.nameKey ? t(page.nameKey) : page?.name || activeGroup.name;
-      addCurrentTab({
-        id: `tool-tab-${Date.now()}`,
-        title: `${title} ${tabs.length + 1}`,
-        data: { type: "page", pageId: activeGroup.pageId },
-      });
     }
-  }, [activeGroup, currentPage, addCurrentTab, tabs.length, activeTabId, dialog, t]);
+  }, [activeGroup, currentPage]);
 
   const handleOpenDirectory = useCallback(() => {
     setDirectoryPickerOpen(true);
@@ -300,7 +317,7 @@ const App: React.FC = () => {
     <>
       <AppFrame
         onMenuOpen={() => setMenuOpen(true)}
-        onTabAction={handleTabAction}
+        onRefresh={handleRefresh}
         onBackToList={handleBackToList}
         onNewPage={() => setNewPageMenuOpen(true)}
       >

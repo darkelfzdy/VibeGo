@@ -42,7 +42,7 @@ func defaultConfig() Config {
 				Paths:   []string{filepath.Join(defaultHomeDir(), ".openclaw", "agents")},
 			},
 		},
-		AutoRescanOnOpen: true,
+		AutoRescanOnOpen: false,
 		CacheEnabled:     true,
 		ShowParseErrors:  true,
 	}

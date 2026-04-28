@@ -1,8 +1,8 @@
 import React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import CodePreview from "@/components/preview/code-preview";
 import { usePreviewStore } from "@/stores/preview-store";
-import CodePreview from "./code-preview";
 
 const MarkdownPreview: React.FC = () => {
   const { file, content, editMode } = usePreviewStore();

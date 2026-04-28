@@ -1,8 +1,8 @@
 import { Settings } from "lucide-react";
 import React from "react";
 import { SettingsPage } from "@/components/settings";
-import { registerPage } from "../registry";
-import type { PageViewProps } from "../types";
+import { registerPage } from "@/pages/registry";
+import type { PageViewProps } from "@/pages/types";
 
 const SettingsView: React.FC<PageViewProps> = () => {
   return <SettingsPage />;

@@ -250,6 +250,11 @@ const createFileManagerState: StateCreator<FileManagerState> = (set, get) => ({
       focusIndex: 0,
       searchQuery: "",
       searchActive: false,
+      sortField: "name",
+      sortOrder: "asc",
+      showHidden: false,
+      viewMode: "list",
+      selectionMode: false,
       loading: false,
       error: null,
       detailFile: null,
@@ -263,6 +268,21 @@ export type FileManagerStoreApi = ReturnType<typeof createFileManagerStore>;
 export const fileManagerStore = createFileManagerStore();
 
 const fileManagerStoreRegistry = new Map<string, FileManagerStoreApi>();
+const fileManagerStoreUnsubscribers = new Map<string, () => void>();
+const fileManagerStoreListeners = new Set<() => void>();
+
+function emitFileManagerStoreChange(): void {
+  for (const listener of fileManagerStoreListeners) {
+    listener();
+  }
+}
+
+function bindFileManagerStore(groupId: string, store: FileManagerStoreApi): void {
+  const unsubscribe = store.subscribe(() => {
+    emitFileManagerStoreChange();
+  });
+  fileManagerStoreUnsubscribers.set(groupId, unsubscribe);
+}
 
 export function getOrCreateFileManagerStore(groupId: string): FileManagerStoreApi {
   const existing = fileManagerStoreRegistry.get(groupId);
@@ -271,15 +291,32 @@ export function getOrCreateFileManagerStore(groupId: string): FileManagerStoreAp
   }
   const store = createFileManagerStore();
   fileManagerStoreRegistry.set(groupId, store);
+  bindFileManagerStore(groupId, store);
+  emitFileManagerStoreChange();
   return store;
 }
 
 export function removeFileManagerStore(groupId: string): void {
+  fileManagerStoreUnsubscribers.get(groupId)?.();
+  fileManagerStoreUnsubscribers.delete(groupId);
   fileManagerStoreRegistry.delete(groupId);
+  emitFileManagerStoreChange();
 }
 
 export function resetFileManagerStores(): void {
+  for (const unsubscribe of fileManagerStoreUnsubscribers.values()) {
+    unsubscribe();
+  }
+  fileManagerStoreUnsubscribers.clear();
   fileManagerStoreRegistry.clear();
+  emitFileManagerStoreChange();
+}
+
+export function subscribeFileManagerStoreChanges(listener: () => void): () => void {
+  fileManagerStoreListeners.add(listener);
+  return () => {
+    fileManagerStoreListeners.delete(listener);
+  };
 }
 
 export function useFileManagerStore<T>(selector: (state: FileManagerState) => T, groupId?: string) {

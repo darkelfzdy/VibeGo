@@ -22,6 +22,7 @@ import {
 import React, { useEffect, useState } from "react";
 import { fileApi } from "@/api/file";
 import { useDialog } from "@/components/common";
+import { ActionButton } from "@/components/common/action-button";
 import { type Locale, useTranslation } from "@/lib/i18n";
 import { getSettingSchema, useSettingsStore } from "@/lib/settings";
 import { useFrameStore, usePreviewStore } from "@/stores";
@@ -351,7 +352,7 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
             <div className="text-[10px] text-ide-mute uppercase font-bold mb-3">{section.title}</div>
             <div className="grid grid-cols-4 gap-1">
               {section.items.map((item) => (
-                <MenuItem
+                <ActionButton
                   key={item.id}
                   icon={item.icon}
                   label={item.label}
@@ -365,7 +366,12 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
         ))}
 
         <div className="mt-6 pt-4 border-t border-ide-border flex justify-between text-[10px] text-ide-mute">
-          <a href="https://github.com/xxnuo/VibeGo" target="_blank" rel="noopener noreferrer" className="hover:text-ide-accent transition-colors underline">
+          <a
+            href="https://github.com/xxnuo/VibeGo"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-ide-accent transition-colors underline"
+          >
             VibeGo{serverVersion ? ` ${serverVersion}` : ""}
           </a>
           <span>{t("common.connected")}</span>
@@ -374,32 +380,5 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     </>
   );
 };
-
-const MenuItem: React.FC<{
-  icon: React.ReactNode;
-  label: string;
-  onClick?: () => void;
-  badge?: string | number;
-  title?: string;
-}> = ({ icon, label, onClick, badge, title }) => (
-  <button
-    onClick={onClick}
-    title={title || label}
-    className="flex flex-col items-center gap-1.5 p-2 rounded-md hover:bg-ide-bg hover:text-ide-accent transition-all text-ide-text group"
-  >
-    <div className="relative p-2 bg-ide-bg rounded-md border border-ide-border group-hover:border-ide-accent group-hover:shadow-glow transition-all">
-      {icon}
-      {badge && (
-        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full px-1 min-w-[16px] h-4 flex items-center justify-center">
-          {badge}
-        </span>
-      )}
-    </div>
-    <div className="flex flex-col items-center gap-0.5">
-      <span className="text-[13px] font-bold uppercase tracking-wide">{label}</span>
-      {title && <span className="text-[11px] text-ide-mute">{title}</span>}
-    </div>
-  </button>
-);
 
 export default ProjectMenu;

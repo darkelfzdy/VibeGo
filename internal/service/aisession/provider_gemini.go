@@ -59,7 +59,23 @@ func (p *geminiProvider) LoadMessages(sourcePath string) ([]SessionMessage, erro
 		if messageValue == nil {
 			continue
 		}
-		content := asString(messageValue["content"])
+		content := extractText(messageValue["content"])
+		if toolCalls := asArray(messageValue["toolCalls"]); len(toolCalls) > 0 {
+			for _, call := range toolCalls {
+				callMap := asMap(call)
+				if callMap == nil {
+					continue
+				}
+				name := asString(callMap["name"])
+				if name == "" {
+					continue
+				}
+				if content != "" {
+					content += "\n"
+				}
+				content += fmt.Sprintf("[Tool: %s]", name)
+			}
+		}
 		if strings.TrimSpace(content) == "" {
 			continue
 		}
@@ -96,7 +112,7 @@ func (p *geminiProvider) parseSession(path string) (SessionMeta, error) {
 		if messageValue == nil {
 			continue
 		}
-		content := strings.TrimSpace(asString(messageValue["content"]))
+		content := strings.TrimSpace(extractText(messageValue["content"]))
 		if content == "" {
 			continue
 		}
@@ -111,12 +127,24 @@ func (p *geminiProvider) parseSession(path string) (SessionMeta, error) {
 		lastActiveAt = createdAt
 	}
 	return SessionMeta{
-		SessionID:    sessionID,
-		Title:        title,
-		Summary:      title,
-		CreatedAt:    createdAt,
-		LastActiveAt: lastActiveAt,
-		SourcePath:   path,
-		MessageCount: messageCount,
+		SessionID:     sessionID,
+		Title:         title,
+		Summary:       title,
+		ResumeCommand: fmt.Sprintf("gemini --resume %s", sessionID),
+		CreatedAt:     createdAt,
+		LastActiveAt:  lastActiveAt,
+		SourcePath:    path,
+		MessageCount:  messageCount,
 	}, nil
+}
+
+func (p *geminiProvider) Delete(root, sourcePath, sessionID string) error {
+	meta, err := p.parseSession(sourcePath)
+	if err != nil {
+		return err
+	}
+	if meta.SessionID != sessionID {
+		return fmt.Errorf("gemini session ID mismatch: expected %s, found %s", sessionID, meta.SessionID)
+	}
+	return removeFileIfExists(sourcePath)
 }

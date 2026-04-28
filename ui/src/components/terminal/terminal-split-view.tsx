@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import type { TerminalInstanceStateUpdate } from "@/components/terminal/terminal-instance";
+import TerminalInstance from "@/components/terminal/terminal-instance";
 import type { LayoutNode } from "@/stores/terminal-store";
-import TerminalInstance from "./terminal-instance";
 
 interface TerminalSplitViewProps {
   layout: LayoutNode;
@@ -9,6 +10,7 @@ interface TerminalSplitViewProps {
   terminals: Array<{ id: string; name: string; status?: string }>;
   onFocus: (terminalId: string) => void;
   onExited: (terminalId: string) => void;
+  onStateChange: (terminalId: string, state: TerminalInstanceStateUpdate) => void;
   onRatioChange: (path: number[], ratio: number) => void;
   path?: number[];
 }
@@ -24,12 +26,15 @@ const TerminalSplitView: React.FC<TerminalSplitViewProps> = ({
   terminals,
   onFocus,
   onExited,
+  onStateChange,
   onRatioChange,
   path = [],
 }) => {
   if (layout.type === "terminal") {
     const terminal = terminals.find((t) => t.id === layout.terminalId);
     const isFocused = focusedId === layout.terminalId;
+    const handleExited = () => onExited(layout.terminalId);
+    const handleStateChange = (state: TerminalInstanceStateUpdate) => onStateChange(layout.terminalId, state);
     return (
       <div
         className={`relative h-full w-full ${isFocused ? "ring-1 ring-ide-accent ring-inset" : ""}`}
@@ -39,8 +44,10 @@ const TerminalSplitView: React.FC<TerminalSplitViewProps> = ({
           terminalId={layout.terminalId}
           terminalName={terminal?.name || "Terminal"}
           isActive={true}
+          isFocused={isFocused}
           isExited={terminal?.status !== "running"}
-          onExited={() => onExited(layout.terminalId)}
+          onExited={handleExited}
+          onStateChange={handleStateChange}
         />
       </div>
     );
@@ -59,6 +66,7 @@ const TerminalSplitView: React.FC<TerminalSplitViewProps> = ({
         terminals={terminals}
         onFocus={onFocus}
         onExited={onExited}
+        onStateChange={onStateChange}
         onRatioChange={onRatioChange}
         path={[...path, 0]}
       />
@@ -69,6 +77,7 @@ const TerminalSplitView: React.FC<TerminalSplitViewProps> = ({
         terminals={terminals}
         onFocus={onFocus}
         onExited={onExited}
+        onStateChange={onStateChange}
         onRatioChange={onRatioChange}
         path={[...path, 1]}
       />
@@ -119,7 +128,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({ direction, ratio, onRat
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [isVertical, onRatioChange],
+    [isVertical, onRatioChange]
   );
 
   const handleTouchStart = useCallback(
@@ -152,7 +161,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({ direction, ratio, onRat
       document.addEventListener("touchmove", onTouchMove, { passive: false });
       document.addEventListener("touchend", onTouchEnd);
     },
-    [isVertical, onRatioChange],
+    [isVertical, onRatioChange]
   );
 
   useEffect(() => {

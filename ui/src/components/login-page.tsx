@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Lock, Terminal } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { authApi } from "@/api/auth";
 
 const AUTH_KEY_STORAGE = "vibego_auth_key";
@@ -125,9 +125,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, locale }) 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-ide-bg z-[99999]">
       <div className="w-full max-w-sm mx-auto px-4">
-        <div
-          className={shake ? "animate-[login-shake_0.5s_ease-in-out]" : ""}
-        >
+        <div className={shake ? "animate-[login-shake_0.5s_ease-in-out]" : ""}>
           <div className="text-center py-6">
             <div className="inline-flex items-center justify-center w-14 h-14 bg-ide-panel border border-ide-border rounded-2xl mb-3">
               <Terminal size={28} className="text-ide-accent" />
@@ -150,9 +148,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, locale }) 
                 disabled={loading || isBanned}
                 autoComplete="current-password"
                 className={`w-full px-3 py-2.5 bg-ide-bg border rounded-lg text-ide-text placeholder-ide-mute text-sm focus:outline-none transition-colors ${
-                  error
-                    ? "border-red-500 focus:border-red-500"
-                    : "border-ide-border focus:border-ide-accent"
+                  error ? "border-red-500 focus:border-red-500" : "border-ide-border focus:border-ide-accent"
                 } ${isBanned ? "opacity-50 cursor-not-allowed" : ""}`}
               />
 
@@ -176,7 +172,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, locale }) 
                     {error}
                     {isBanned && (
                       <span className="ml-1 font-mono text-xs">
-                        ({t(locale, "retryIn")} {retryAfter}{t(locale, "seconds")})
+                        ({t(locale, "retryIn")} {retryAfter}
+                        {t(locale, "seconds")})
                       </span>
                     )}
                   </div>

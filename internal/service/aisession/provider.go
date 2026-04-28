@@ -12,6 +12,7 @@ type provider interface {
 	DefaultRoots() []string
 	Scan(root string) ([]SessionMeta, error)
 	LoadMessages(sourcePath string) ([]SessionMessage, error)
+	Delete(root, sourcePath, sessionID string) error
 }
 
 func providers() []provider {

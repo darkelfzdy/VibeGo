@@ -1,6 +1,7 @@
 import { Calendar, Copy, Download, Edit3, File, Folder, HardDrive, Link2, Shield, Trash2 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { fileApi } from "@/api/file";
+import { ActionButton } from "@/components/common/action-button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { getIntlLocale, type Locale, useTranslation } from "@/lib/i18n";
 import { useSettingsStore } from "@/lib/settings";
@@ -135,36 +136,6 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({ file, open, onClose, 
       </div>
     );
   };
-
-  const ActionButton = ({
-    onClick,
-    icon,
-    label,
-    destructive = false,
-  }: {
-    onClick: () => void;
-    icon: React.ReactNode;
-    label: string;
-    destructive?: boolean;
-  }) => (
-    <button
-      onClick={onClick}
-      className={`flex flex-col items-center gap-1.5 p-2 rounded-md transition-all group ${
-        destructive ? "text-red-500 hover:bg-red-500/10" : "text-ide-text hover:bg-ide-bg hover:text-ide-accent"
-      }`}
-    >
-      <div
-        className={`relative p-2 rounded-md border transition-all ${
-          destructive
-            ? "bg-red-500/10 border-red-500/40 group-hover:border-red-500"
-            : "bg-ide-bg border-ide-border group-hover:border-ide-accent group-hover:shadow-glow"
-        }`}
-      >
-        {icon}
-      </div>
-      <span className={`text-[11px] font-bold tracking-wide ${destructive ? "text-red-500" : ""}`}>{label}</span>
-    </button>
-  );
 
   return (
     <Dialog

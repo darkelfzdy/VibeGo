@@ -37,6 +37,7 @@
     "refresh": "Refresh",
     "clear": "Clear",
     "search": "Search",
+    "copy": "Copy",
     "backToList": "Back to List",
     "fullscreen": "Fullscreen",
     "exitFullscreen": "Exit Fullscreen",
@@ -85,10 +86,12 @@
     "changes": "Changes",
     "history": "History",
     "commit": "Commit",
+    "commitShortcut": "Ctrl+Enter",
     "commitTo": "Commit to",
     "summaryPlaceholder": "Summary (required)",
     "descriptionPlaceholder": "Description",
     "amend": "Amend last commit",
+    "useAutoMessage": "Use auto-generated message",
     "selectAll": "Select all",
     "noChanges": "No changes",
     "noCommits": "No commits yet",
@@ -158,7 +161,9 @@
     "notARepoHint": "This folder is not initialized as a Git repository. Initialize one to start tracking changes.",
     "initRepo": "Initialize Repository",
     "initRepoConfirmTitle": "Initialize Git repository?",
-    "initRepoConfirmMessage": "This will create a .git directory in the current folder and start tracking file changes."
+    "initRepoConfirmMessage": "This will create a .git directory in the current folder and start tracking file changes.",
+    "unpushedCommit": "This commit has not been pushed",
+    "unpushedCommits": "unpushed commits"
   },
   "terminal": {
     "noActiveSession": "No terminal session active",
@@ -184,11 +189,16 @@
     "selected": "selected",
     "deleteHistoryTitle": "Delete Terminal History",
     "deleteHistoryConfirm": "Are you sure you want to delete {count} terminal history records? This action cannot be undone.",
+    "closeFailed": "Failed to close terminal",
+    "deleteFailed": "Failed to delete terminal",
     "renameFailed": "Failed to rename terminal",
     "readOnly": "Read Only",
     "new": "New Terminal",
     "list": "Terminal List",
-    "backToTerminal": "Back to Terminal"
+    "backToTerminal": "Back to Terminal",
+    "tipsTitle": "Tips",
+    "tipScroll": "Use two fingers to scroll terminal content vertically.",
+    "tipSplit": "Open the main menu to split the terminal down or right."
   },
   "fileTree": {
     "projectRoot": "Project Root"
@@ -218,7 +228,14 @@
       "fileManager": "File Manager",
       "editor": "Editor",
       "terminal": "Terminal",
+      "notification": "Notifications",
+      "page": "Pages",
+      "keyboard": "Keyboard",
       "git": "Git"
+    },
+    "pageVisibility": {
+      "label": "New Page Items",
+      "description": "Control which features appear in the New Page menu."
     },
     "theme": {
       "label": "Theme",
@@ -266,9 +283,22 @@
       "label": "Word Wrap",
       "description": "Enable word wrapping in editor"
     },
+    "terminalFontFamily": {
+      "label": "Terminal Font",
+      "description": "Choose the monospace font used by terminal sessions",
+      "optionDefault": "Default terminal font",
+      "optionSystemMono": "Follow UI monospace font"
+    },
     "terminalDesktopNotifications": {
       "label": "Desktop Notifications",
       "description": "Prefer browser notifications when the page is in the background and the terminal is not active"
+    },
+    "notificationTest": {
+      "label": "Test Notification",
+      "description": "Send an in-app notification to verify position, style, and swipe dismiss.",
+      "button": "Send Test Notification",
+      "toastTitle": "Test Notification",
+      "toastDescription": "This message is used to verify notification style and interaction."
     },
     "gitUserName": {
       "label": "Git User Name",
@@ -282,11 +312,35 @@
       "label": "Default Commit Message",
       "description": "Auto-fill the commit title when opening Git view or after each commit"
     },
-    "gitCommitTimeMode": {
-      "label": "Commit Time Mode",
-      "description": "Use client current time or increment from previous commit time",
-      "optionClient": "Client Time",
-      "optionIncrement": "Increment from Last"
+    "useNativeKeyboard": {
+      "label": "Use Native Keyboard",
+      "description": "Disable the virtual keyboard and use the system keyboard for input"
+    },
+    "keyboardHaptic": {
+      "label": "Key Haptic",
+      "description": "Vibrate when pressing virtual keyboard keys"
+    },
+    "keyboardSound": {
+      "label": "Key Sound",
+      "description": "Play iOS-style key press sound when typing"
+    },
+    "speechAssetSource": {
+      "label": "Speech Download Source",
+      "description": "Choose the speech model download source",
+      "optionAuto": "Auto",
+      "optionOfficial": "Official",
+      "optionChina": "China Mirror"
+    },
+    "speechAssets": {
+      "label": "Speech Assets",
+      "description": "Download offline speech recognition assets here before first use",
+      "button": "Download Assets",
+      "downloading": "Downloading speech recognition assets",
+      "downloaded": "Speech recognition assets downloaded",
+      "downloadFailed": "Failed to download speech recognition assets",
+      "missingTitle": "Speech assets not downloaded",
+      "missingDescription": "Open Settings > Keyboard to download speech recognition assets.",
+      "openSettings": "Open Settings"
     },
     "option": {
       "light": "Light",
@@ -358,6 +412,7 @@
     },
     "processMonitor": {
       "name": "Process Monitor",
+      "description": "View system resources and processes with search, sorting, and kill actions.",
       "title": "Process Monitor",
       "refresh": "Refresh",
       "search": "Search...",
@@ -409,6 +464,7 @@
     },
     "aiSessionManager": {
       "name": "AI Session Viewer",
+      "description": "Browse local AI tool sessions with search, details, and scan source controls.",
       "settings": "Scan Settings",
       "backToSessions": "Back to Sessions",
       "loadFailed": "Failed to load sessions",
@@ -431,6 +487,8 @@
       "searchInSession": "Search within this session",
       "matchedMessages": "{count} matched messages",
       "emptyMessages": "No readable messages in this session",
+      "pullToRefresh": "Pull to refresh",
+      "releaseToRefresh": "Release to refresh",
       "autoRescanOnOpen": "Rescan on open",
       "autoRescanOnOpenDesc": "Automatically scan all enabled providers when the page opens",
       "cacheEnabled": "Enable local cache",
@@ -453,6 +511,34 @@
       "generalSettings": "General",
       "providerSettings": "AI Tools",
       "saveConfig": "Save and rescan",
+      "copyFailed": "Copy failed",
+      "messageCopied": "Message copied",
+      "resumeCopied": "Resume command copied",
+      "projectCopied": "Project path copied",
+      "projectOpened": "Project opened",
+      "openProjectFailed": "Failed to open project",
+      "expandHeader": "Expand header",
+      "collapseHeader": "Collapse header",
+      "copyResumeCommand": "Copy Resume Command",
+      "copyProjectPath": "Copy Project Path",
+      "openProject": "Open Project",
+      "deleteCurrent": "Delete Session",
+      "deleteCurrentShort": "Delete",
+      "deleteSelected": "Delete Selected",
+      "deleteSuccess": "Session deleted",
+      "deleteFailed": "Delete failed",
+      "batchDeleteSuccess": "Deleted {count} sessions",
+      "deleteConfirm": "Delete this local session?",
+      "batchDeleteConfirm": "Delete these {count} local sessions?",
+      "selectedCount": "{count} selected",
+      "selectAllFiltered": "Select all visible",
+      "clearFilteredSelection": "Clear visible",
+      "clearSelection": "Clear selection",
+      "expandContent": "Expand full content",
+      "collapseContent": "Collapse",
+      "expandAllMessages": "Expand all long messages",
+      "collapseAllMessages": "Collapse all long messages",
+      "deleting": "Deleting",
       "roleAssistant": "AI",
       "roleUser": "User",
       "roleTool": "Tool",
@@ -462,6 +548,7 @@
     },
     "remoteControl": {
       "name": "Remote Control",
+      "description": "Control this device's volume, media playback, and screen power.",
       "title": "Remote Control",
       "volume": "Volume",
       "mute": "Mute",
@@ -470,10 +557,85 @@
       "screen": "Screen",
       "screenOff": "Screen Off",
       "screenOn": "Screen On"
+    },
+    "portManager": {
+      "name": "Port Manager",
+      "description": "Inspect listening ports, kill owning processes, and manage forwarding rules.",
+      "title": "Port Manager",
+      "refresh": "Refresh",
+      "search": "Search...",
+      "ports": "Ports",
+      "forwards": "Forwards",
+      "port": "Port",
+      "protocol": "Protocol",
+      "localAddr": "Local Address",
+      "remoteAddr": "Remote Address",
+      "status": "Status",
+      "pid": "PID",
+      "processName": "Process",
+      "noListeningPorts": "No listening ports",
+      "loading": "Loading...",
+      "addForward": "Add Forward",
+      "listenPort": "Listen Port",
+      "targetAddr": "Target Address",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "enable": "Enable",
+      "disable": "Disable",
+      "remove": "Remove",
+      "noForwards": "No forward rules",
+      "addForwardTitle": "Add Forward Rule",
+      "selectProtocol": "Select protocol",
+      "listenPortPlaceholder": "Port number",
+      "targetAddrPlaceholder": "host:port or http://...",
+      "creating": "Creating...",
+      "create": "Create",
+      "tcp": "TCP",
+      "udp": "UDP",
+      "http": "HTTP",
+      "listening": "LISTEN",
+      "total": "Total",
+      "removeConfirm": "Remove this forward rule?",
+      "removeConfirmDesc": "The port forwarding will be stopped and removed.",
+      "killProcess": "Kill Process",
+      "killConfirm": "Kill this process?",
+      "killConfirmDesc": "The process will be terminated and the port will be released.",
+      "openInBrowser": "Open in Browser",
+      "createForward": "Create Forward",
+      "httpHint": "Full URL, e.g. http://localhost:8080",
+      "tcpHint": "host:port, e.g. localhost:8080"
+    },
+    "keyboardTest": {
+      "name": "Keyboard Test",
+      "description": "Verify virtual keyboard input, modifier shortcuts, and event logs.",
+      "title": "Keyboard Test",
+      "clear": "Clear",
+      "placeholder": "Click keyboard to type here...",
+      "eventLog": "Event Log"
+    },
+    "blockTerm": {
+      "name": "BlockTerm",
+      "description": "Run terminal commands as blocks for easier output review, copy, and rerun.",
+      "title": "BlockTerm",
+      "run": "Run",
+      "stop": "Stop",
+      "clear": "Clear",
+      "ready": "Ready",
+      "connecting": "Connecting",
+      "disconnected": "Disconnected",
+      "running": "Running",
+      "newSession": "New Session",
+      "waitingOutput": "Waiting for output...",
+      "emptyTitle": "Block Terminal",
+      "emptyHint": "Commands become separate blocks for review, copy, and rerun. Interactive TUI programs switch into terminal mode automatically.",
+      "placeholder": "Enter shell command. Enter runs, Shift+Enter inserts a newline"
     }
   },
   "newPage": {
     "plugins": "Plugins"
+  },
+  "pageTag": {
+    "test": "Test"
   },
   "directoryPicker": {
     "title": "Select Directory",
@@ -488,6 +650,21 @@
     "minutesShort": "{count}m",
     "hoursMinutesShort": "{hours}h {minutes}m",
     "daysHoursShort": "{days}d {hours}h"
+  },
+  "httpUpgrade": {
+    "title": "Switching To A Secure Connection",
+    "heading": "Redirecting to HTTPS",
+    "description": "Some browser capabilities are restricted to secure contexts, so VibeGo needs to switch this session to HTTPS first.",
+    "secureContextTitle": "Browser capability limits",
+    "secureContextDescription": "For example, voice input needs microphone access and only works in secure contexts such as HTTPS.",
+    "certificateTitle": "Automatic self-signed certificate",
+    "certificateDescription": "VibeGo generates a secure random self-signed certificate for this service and then redirects you to the HTTPS address.",
+    "trustTitle": "Manual trust is still required",
+    "trustDescription": "If the next page shows a certificate warning, trust it in the browser and continue to the HTTPS site.",
+    "targetLabel": "Next address",
+    "disableHint": "To disable this behavior, start VibeGo with {flag}",
+    "countdown": "Redirecting automatically in {seconds}s",
+    "openNow": "Open HTTPS Now"
   },
   "newGroup": {
     "openFolderDescription": "Browse and open a folder",

@@ -1,5 +1,5 @@
-export { default as CodeEditor } from "./code-editor";
-export { default as FileDetailSheet } from "./file-detail-sheet";
-export { default as FileManager } from "./file-manager";
-export { default as FileManagerBreadcrumb } from "./file-manager-breadcrumb";
-export { default as FileManagerToolbar } from "./file-manager-toolbar";
+export { default as CodeEditor } from "@/components/file/code-editor";
+export { default as FileDetailSheet } from "@/components/file/file-detail-sheet";
+export { default as FileManager } from "@/components/file/file-manager";
+export { default as FileManagerBreadcrumb } from "@/components/file/file-manager-breadcrumb";
+export { default as FileManagerToolbar } from "@/components/file/file-manager-toolbar";

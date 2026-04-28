@@ -1,8 +1,8 @@
 import { Terminal } from "lucide-react";
 import React from "react";
 import { TerminalPage } from "@/components/terminal";
-import { registerPage } from "../registry";
-import type { PageViewProps } from "../types";
+import { registerPage } from "@/pages/registry";
+import type { PageViewProps } from "@/pages/types";
 
 const TerminalWorkspaceView: React.FC<PageViewProps> = ({ context }) => {
   return <TerminalPage groupId={context.groupId} cwd={context.path} />;

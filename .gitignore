@@ -7,3 +7,6 @@ ui/CLAUDE.md
 /dist
 /artifacts
 /testdata
+/scripts/__pycache__
+/assets/sherpa/
+/thirdparty/blockterm-demo

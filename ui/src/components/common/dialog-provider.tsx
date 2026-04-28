@@ -179,9 +179,8 @@ export const DialogProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             showCloseButton={false}
             onKeyDown={handleKeyDown}
             style={{ bottom: viewportInset ? `${viewportInset}px` : undefined }}
-            className="inset-x-0 top-auto bottom-0 translate-x-0 translate-y-0 w-full max-w-2xl max-h-[calc(100dvh-0.75rem)] overflow-y-auto rounded-t-2xl rounded-b-none border-t border-x-0 border-b-0 p-4 pb-5 md:inset-auto md:top-[50%] md:left-[50%] md:-translate-x-[50%] md:-translate-y-[50%] md:w-full md:max-w-md md:rounded-2xl md:border md:p-6 md:pb-6"
+            className="md:max-w-md"
           >
-            <div className="bg-muted mx-auto h-1.5 w-10 rounded-full" />
             <DialogHeader>
               <DialogTitle>{dialog.title}</DialogTitle>
               {dialog.message && <DialogDescription>{dialog.message}</DialogDescription>}
@@ -197,9 +196,9 @@ export const DialogProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 />
               </div>
             )}
-            <DialogFooter className="gap-3 pt-3">
+            <DialogFooter className="gap-3 pt-3 md:flex-row">
               {dialog.type !== "alert" && (
-                <Button variant="outline" onClick={handleClose} className="h-11 w-full">
+                <Button variant="outline" onClick={handleClose} className="h-11 w-full md:w-auto">
                   {dialog.cancelText || t("common.cancel")}
                 </Button>
               )}
@@ -207,7 +206,7 @@ export const DialogProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 variant={dialog.confirmVariant === "danger" ? "destructive" : "default"}
                 onClick={handleConfirm}
                 className={cn(
-                  "h-11 w-full",
+                  "h-11 w-full md:w-auto",
                   dialog.confirmVariant !== "danger" && "bg-ide-accent text-ide-on-accent hover:bg-ide-accent/90"
                 )}
                 autoFocus={dialog.type !== "prompt"}

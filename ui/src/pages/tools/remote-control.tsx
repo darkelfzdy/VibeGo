@@ -13,10 +13,11 @@ import {
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { remoteApi } from "@/api/remote";
+import { usePageTopBar } from "@/hooks/use-page-top-bar";
 import { useTranslation } from "@/lib/i18n";
+import { registerPage } from "@/pages/registry";
+import type { PageViewProps } from "@/pages/types";
 import { useAppStore } from "@/stores/app-store";
-import { registerPage } from "../registry";
-import type { PageViewProps } from "../types";
 
 const POLL_INTERVAL = 3000;
 
@@ -29,7 +30,7 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
   const [loading, setLoading] = useState<string | null>(null);
 
   const volumeSliderRef = useRef<HTMLInputElement>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval>>();
+  const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   const fetchState = useCallback(async () => {
     try {
@@ -54,45 +55,39 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
       } catch {}
       setLoading(null);
     },
-    [fetchState],
+    [fetchState]
   );
 
-  const handleVolumeChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = Number(e.target.value);
-      setVolume(val);
-    },
-    [],
-  );
+  const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = Number(e.target.value);
+    setVolume(val);
+  }, []);
 
   const handleVolumeCommit = useCallback(
     (val: number) => {
       doAction("volume-set", () => remoteApi.setVolume(val));
     },
-    [doAction],
+    [doAction]
+  );
+
+  usePageTopBar(
+    {
+      show: true,
+      centerContent: t("plugin.remoteControl.title"),
+    },
+    [t]
   );
 
   return (
     <div className="h-full flex flex-col bg-ide-bg overflow-auto">
       <div className="flex-1 flex flex-col items-center justify-start px-4 py-5 gap-5 max-w-lg mx-auto w-full">
-        <div className="flex items-center gap-2 self-start">
-          <Radius size={20} className="text-ide-accent" />
-          <span className="font-medium text-ide-text text-base">
-            {t("plugin.remoteControl.title")}
-          </span>
-        </div>
-
         <div className="w-full bg-ide-panel rounded-xl border border-ide-border p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Volume2 size={16} className="text-blue-500" />
-              <span className="text-sm font-medium text-ide-text">
-                {t("plugin.remoteControl.volume")}
-              </span>
+              <span className="text-sm font-medium text-ide-text">{t("plugin.remoteControl.volume")}</span>
             </div>
-            <span className="text-xs text-ide-mute font-mono tabular-nums">
-              {volume}%
-            </span>
+            <span className="text-xs text-ide-mute font-mono tabular-nums">{volume}%</span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -138,9 +133,7 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
             >
               {muted ? <VolumeX size={16} /> : <Volume1 size={16} />}
               <span className="text-xs font-medium">
-                {muted
-                  ? t("plugin.remoteControl.unmute")
-                  : t("plugin.remoteControl.mute")}
+                {muted ? t("plugin.remoteControl.unmute") : t("plugin.remoteControl.mute")}
               </span>
             </button>
           </div>
@@ -149,18 +142,14 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
         <div className="w-full bg-ide-panel rounded-xl border border-ide-border p-4 space-y-4">
           <div className="flex items-center gap-2">
             <Play size={16} className="text-green-500" />
-            <span className="text-sm font-medium text-ide-text">
-              {t("plugin.remoteControl.media")}
-            </span>
+            <span className="text-sm font-medium text-ide-text">{t("plugin.remoteControl.media")}</span>
           </div>
 
           <div className="flex items-center justify-center gap-3">
             <button
               type="button"
               className="p-3 rounded-xl bg-ide-bg border border-ide-border hover:bg-ide-border/50 active:scale-90 transition-all"
-              onClick={() =>
-                doAction("prev", () => remoteApi.mediaPrevious())
-              }
+              onClick={() => doAction("prev", () => remoteApi.mediaPrevious())}
               disabled={loading === "prev"}
             >
               <SkipBack size={22} className="text-ide-text" />
@@ -168,9 +157,7 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
             <button
               type="button"
               className="p-4 rounded-2xl bg-green-500/15 border border-green-500/30 hover:bg-green-500/25 active:scale-90 transition-all"
-              onClick={() =>
-                doAction("play", () => remoteApi.mediaPlayPause())
-              }
+              onClick={() => doAction("play", () => remoteApi.mediaPlayPause())}
               disabled={loading === "play"}
             >
               <Play size={28} className="text-green-500" />
@@ -178,9 +165,7 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
             <button
               type="button"
               className="p-3 rounded-xl bg-ide-bg border border-ide-border hover:bg-ide-border/50 active:scale-90 transition-all"
-              onClick={() =>
-                doAction("next", () => remoteApi.mediaNext())
-              }
+              onClick={() => doAction("next", () => remoteApi.mediaNext())}
               disabled={loading === "next"}
             >
               <SkipForward size={22} className="text-ide-text" />
@@ -191,37 +176,27 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
         <div className="w-full bg-ide-panel rounded-xl border border-ide-border p-4 space-y-4">
           <div className="flex items-center gap-2">
             <Monitor size={16} className="text-purple-500" />
-            <span className="text-sm font-medium text-ide-text">
-              {t("plugin.remoteControl.screen")}
-            </span>
+            <span className="text-sm font-medium text-ide-text">{t("plugin.remoteControl.screen")}</span>
           </div>
 
           <div className="flex items-center justify-center gap-3">
             <button
               type="button"
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-ide-bg border border-ide-border hover:bg-ide-border/50 active:scale-95 transition-all"
-              onClick={() =>
-                doAction("screen-off", () => remoteApi.screenOff())
-              }
+              onClick={() => doAction("screen-off", () => remoteApi.screenOff())}
               disabled={loading === "screen-off"}
             >
               <MonitorOff size={18} className="text-red-400" />
-              <span className="text-sm text-ide-text">
-                {t("plugin.remoteControl.screenOff")}
-              </span>
+              <span className="text-sm text-ide-text">{t("plugin.remoteControl.screenOff")}</span>
             </button>
             <button
               type="button"
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-ide-bg border border-ide-border hover:bg-ide-border/50 active:scale-95 transition-all"
-              onClick={() =>
-                doAction("screen-on", () => remoteApi.screenOn())
-              }
+              onClick={() => doAction("screen-on", () => remoteApi.screenOn())}
               disabled={loading === "screen-on"}
             >
               <Monitor size={18} className="text-green-400" />
-              <span className="text-sm text-ide-text">
-                {t("plugin.remoteControl.screenOn")}
-              </span>
+              <span className="text-sm text-ide-text">{t("plugin.remoteControl.screenOn")}</span>
             </button>
           </div>
         </div>
@@ -272,9 +247,11 @@ registerPage({
   id: "remote-control",
   name: "Remote Control",
   nameKey: "plugin.remoteControl.name",
+  descriptionKey: "plugin.remoteControl.description",
   icon: Radius,
   order: 15,
   category: "tool",
+  singleton: true,
   View: RemoteControlView,
 });
 

@@ -7,5 +7,5 @@ export {
   type SettingOption,
   type SettingSchema,
   type SettingType,
-} from "./schema";
-export { useSettingsStore } from "./store";
+} from "@/lib/settings/schema";
+export { useSettingsStore } from "@/lib/settings/store";

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 )
 
 type codexProvider struct {
@@ -28,8 +29,8 @@ func (p *codexProvider) DefaultRoots() []string {
 
 func (p *codexProvider) Scan(root string) ([]SessionMeta, error) {
 	paths, err := collectFiles(root, func(path string, entry os.DirEntry) bool {
-			return filepath.Ext(path) == ".jsonl"
-		})
+		return filepath.Ext(path) == ".jsonl"
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -49,15 +50,34 @@ func (p *codexProvider) LoadMessages(sourcePath string) ([]SessionMessage, error
 			return true
 		}
 		payload := asMap(value["payload"])
-		if payload == nil || asString(payload["type"]) != "message" {
+		if payload == nil {
 			return true
 		}
-		content := extractText(payload["content"])
+		payloadType := asString(payload["type"])
+		role := ""
+		content := ""
+		switch payloadType {
+		case "message":
+			role = asString(payload["role"])
+			content = extractText(payload["content"])
+		case "function_call":
+			role = "assistant"
+			name := asString(payload["name"])
+			if name == "" {
+				name = "unknown"
+			}
+			content = fmt.Sprintf("[Tool: %s]", name)
+		case "function_call_output":
+			role = "tool"
+			content = asString(payload["output"])
+		default:
+			return true
+		}
 		if content == "" {
 			return true
 		}
 		message := SessionMessage{
-			Role:    asString(payload["role"]),
+			Role:    role,
 			Content: content,
 			Ts:      parseTimestampToMillis(value["timestamp"]),
 		}
@@ -79,6 +99,7 @@ func (p *codexProvider) parseSession(path string) (SessionMeta, error) {
 	var sessionID string
 	var projectDir string
 	var createdAt int64
+	var firstUserMessage string
 	for _, line := range head {
 		var value map[string]any
 		if err := json.Unmarshal([]byte(line), &value); err != nil {
@@ -88,6 +109,15 @@ func (p *codexProvider) parseSession(path string) (SessionMeta, error) {
 			createdAt = parseTimestampToMillis(value["timestamp"])
 		}
 		if asString(value["type"]) != "session_meta" {
+			if firstUserMessage == "" && asString(value["type"]) == "response_item" {
+				payload := asMap(value["payload"])
+				if payload != nil && asString(payload["type"]) == "message" && asString(payload["role"]) == "user" {
+					text := strings.TrimSpace(extractText(payload["content"]))
+					if text != "" && !strings.HasPrefix(text, "# AGENTS.md") {
+						firstUserMessage = truncateSummary(text, titleMaxChars)
+					}
+				}
+			}
 			continue
 		}
 		payload := asMap(value["payload"])
@@ -139,15 +169,27 @@ func (p *codexProvider) parseSession(path string) (SessionMeta, error) {
 
 	messageCount, _ := p.countMessages(path)
 	return SessionMeta{
-		SessionID:    sessionID,
-		Title:        pathBasename(projectDir),
-		Summary:      summary,
-		ProjectDir:   projectDir,
-		CreatedAt:    createdAt,
-		LastActiveAt: lastActiveAt,
-		SourcePath:   path,
-		MessageCount: messageCount,
+		SessionID:     sessionID,
+		Title:         firstNonEmpty(firstUserMessage, pathBasename(projectDir)),
+		Summary:       summary,
+		ProjectDir:    projectDir,
+		ResumeCommand: fmt.Sprintf("codex resume %s", sessionID),
+		CreatedAt:     createdAt,
+		LastActiveAt:  lastActiveAt,
+		SourcePath:    path,
+		MessageCount:  messageCount,
 	}, nil
+}
+
+func (p *codexProvider) Delete(root, sourcePath, sessionID string) error {
+	meta, err := p.parseSession(sourcePath)
+	if err != nil {
+		return err
+	}
+	if meta.SessionID != sessionID {
+		return fmt.Errorf("codex session ID mismatch: expected %s, found %s", sessionID, meta.SessionID)
+	}
+	return removeFileIfExists(sourcePath)
 }
 
 func (p *codexProvider) countMessages(path string) (int, error) {

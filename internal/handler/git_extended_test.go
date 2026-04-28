@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,8 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-git/go-git/v6"
-	"github.com/go-git/go-git/v6/plumbing/object"
+	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,37 +36,45 @@ func postJSON(r *gin.Engine, path string, body interface{}) *httptest.ResponseRe
 	return w
 }
 
+func setupRouterWithGitWS() (*gin.Engine, *GitHandler) {
+	gin.SetMode(gin.TestMode)
+	h := NewGitHandler(nil)
+	wsHandler := NewGitWSHandler(h)
+	h.SetWSHandler(wsHandler)
+	r := gin.New()
+	h.Register(r.Group("/"))
+	wsHandler.Register(r.Group("/"))
+	return r, h
+}
+
 func setupGitRepoWithMultipleCommits(t *testing.T) string {
 	dir, err := os.MkdirTemp("", "git-ext-test")
 	require.NoError(t, err)
-	repo, err := git.PlainInit(dir, false)
-	require.NoError(t, err)
-	wt, err := repo.Worktree()
-	require.NoError(t, err)
+
+	runGit := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %s failed: %s\n%s", args[0], err, string(out))
+		}
+	}
+
+	runGit("init")
+	runGit("config", "user.name", "Test")
+	runGit("config", "user.email", "test@test.com")
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "file1.txt"), []byte("one"), 0644))
-	_, err = wt.Add("file1.txt")
-	require.NoError(t, err)
-	_, err = wt.Commit("commit 1", &git.CommitOptions{
-		Author: &object.Signature{Name: "Test", Email: "test@test.com", When: time.Now()},
-	})
-	require.NoError(t, err)
+	runGit("add", "file1.txt")
+	runGit("commit", "-m", "commit 1")
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "file2.txt"), []byte("two"), 0644))
-	_, err = wt.Add("file2.txt")
-	require.NoError(t, err)
-	_, err = wt.Commit("commit 2", &git.CommitOptions{
-		Author: &object.Signature{Name: "Test", Email: "test@test.com", When: time.Now()},
-	})
-	require.NoError(t, err)
+	runGit("add", "file2.txt")
+	runGit("commit", "-m", "commit 2")
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "file3.txt"), []byte("three"), 0644))
-	_, err = wt.Add("file3.txt")
-	require.NoError(t, err)
-	_, err = wt.Commit("commit 3", &git.CommitOptions{
-		Author: &object.Signature{Name: "Test", Email: "test@test.com", When: time.Now()},
-	})
-	require.NoError(t, err)
+	runGit("add", "file3.txt")
+	runGit("commit", "-m", "commit 3")
 
 	return dir
 }
@@ -127,7 +135,7 @@ func TestGitBranches(t *testing.T) {
 
 	var resp struct {
 		Branches      []BranchInfo `json:"branches"`
-		CurrentBranch string           `json:"currentBranch"`
+		CurrentBranch string       `json:"currentBranch"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.GreaterOrEqual(t, len(resp.Branches), 2)
@@ -278,6 +286,81 @@ func TestGitStashDrop(t *testing.T) {
 	assert.Empty(t, listResp.Stashes)
 }
 
+func TestGitWSBroadcastsSelectionChangesImmediately(t *testing.T) {
+	dir := setupGitRepoWithMultipleCommits(t)
+	defer os.RemoveAll(dir)
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "file1.txt"), []byte("ONE\nTWO\nthree"), 0644))
+
+	router, _ := setupRouterWithGitWS()
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/git/ws?path=" + url.QueryEscape(dir)
+
+	connA, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+	defer connA.Close()
+
+	connB, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+	defer connB.Close()
+
+	w := postJSON(router, "/git/file-diff", map[string]interface{}{
+		"path": dir, "filePath": "file1.txt", "mode": "working",
+	})
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var diffResp InteractiveDiff
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &diffResp))
+
+	lineIDs := make([]string, 0)
+	for _, hunk := range diffResp.Hunks {
+		for _, line := range hunk.Lines {
+			if (line.Content == "two" || line.Content == "TWO") && line.Selectable {
+				lineIDs = append(lineIDs, line.ID)
+			}
+		}
+	}
+	require.Len(t, lineIDs, 1)
+
+	w = postJSON(router, "/git/apply-selection", map[string]interface{}{
+		"path": dir, "filePath": "file1.txt", "mode": "working",
+		"target": "line", "action": "exclude",
+		"patchHash": diffResp.PatchHash,
+		"lineIds":   lineIDs, "hunkIds": []string{},
+	})
+	require.Equal(t, http.StatusOK, w.Code)
+
+	require.NoError(t, connB.SetReadDeadline(time.Now().Add(1*time.Second)))
+
+	for {
+		var event GitWSEvent
+		require.NoError(t, connB.ReadJSON(&event))
+		if event.Type != "status_changed" {
+			continue
+		}
+
+		rawData, err := json.Marshal(event.Data)
+		require.NoError(t, err)
+
+		var payload struct {
+			Files []StructuredFile `json:"files"`
+		}
+		require.NoError(t, json.Unmarshal(rawData, &payload))
+
+		found := false
+		for _, file := range payload.Files {
+			if file.Path == "file1.txt" {
+				found = true
+				assert.Equal(t, "partial", file.IncludedState)
+			}
+		}
+		require.True(t, found)
+		return
+	}
+}
+
 func TestGitAmend(t *testing.T) {
 	dir := setupGitRepoWithMultipleCommits(t)
 	defer os.RemoveAll(dir)
@@ -293,10 +376,10 @@ func TestGitAmend(t *testing.T) {
 	})
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	repo, _ := git.PlainOpen(dir)
-	head, _ := repo.Head()
-	commit, _ := repo.CommitObject(head.Hash())
-	assert.Equal(t, "amended commit", strings.TrimSpace(commit.Message))
+	cmd := exec.Command("git", "log", "-1", "--format=%s")
+	cmd.Dir = dir
+	out, _ := cmd.Output()
+	assert.Equal(t, "amended commit", strings.TrimSpace(string(out)))
 }
 
 func TestGitLogWithSkip(t *testing.T) {
@@ -386,7 +469,8 @@ func TestGitSmartSwitchBranch(t *testing.T) {
 func TestGitStatusEmptyRepo(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "git-empty-test")
 	defer os.RemoveAll(dir)
-	git.PlainInit(dir, false)
+	cmd := exec.Command("git", "init", dir)
+	cmd.Run()
 
 	r, _ := setupRouter()
 	w := postJSON(r, "/git/status", map[string]string{"path": dir})
@@ -396,7 +480,8 @@ func TestGitStatusEmptyRepo(t *testing.T) {
 func TestGitLogEmptyRepo(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "git-empty-log-test")
 	defer os.RemoveAll(dir)
-	git.PlainInit(dir, false)
+	cmd := exec.Command("git", "init", dir)
+	cmd.Run()
 
 	r, _ := setupRouter()
 	w := postJSON(r, "/git/log", map[string]string{"path": dir})

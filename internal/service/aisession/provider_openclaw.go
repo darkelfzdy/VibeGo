@@ -10,6 +10,13 @@ import (
 
 type openClawProvider struct{}
 
+func stripOpenClawMessageIDSuffix(text string) string {
+	if index := strings.LastIndex(text, "\n[message_id:"); index >= 0 {
+		return strings.TrimSpace(text[:index])
+	}
+	return strings.TrimSpace(text)
+}
+
 func newOpenClawProvider() provider {
 	return &openClawProvider{}
 }
@@ -33,12 +40,13 @@ func (p *openClawProvider) Scan(root string) ([]SessionMeta, error) {
 			continue
 		}
 		sessionsDir := filepath.Join(root, entry.Name(), "sessions")
+		displayNames := p.loadDisplayNames(sessionsDir)
 		paths, _ := collectFiles(sessionsDir, func(path string, entry os.DirEntry) bool {
 			return filepath.Ext(path) == ".jsonl" && entry.Name() != "sessions.json"
 		})
 		for _, path := range paths {
 			result = append(result, scanPath(p.ID(), path, func() (SessionMeta, error) {
-				return p.parseSession(path)
+				return p.parseSession(path, displayNames)
 			}))
 		}
 	}
@@ -55,7 +63,7 @@ func (p *openClawProvider) LoadMessages(sourcePath string) ([]SessionMessage, er
 		if messageValue == nil {
 			return true
 		}
-		content := extractText(messageValue["content"])
+		content := stripOpenClawMessageIDSuffix(extractText(messageValue["content"]))
 		if content == "" {
 			return true
 		}
@@ -76,7 +84,7 @@ func (p *openClawProvider) LoadMessages(sourcePath string) ([]SessionMessage, er
 	return messages, err
 }
 
-func (p *openClawProvider) parseSession(path string) (SessionMeta, error) {
+func (p *openClawProvider) parseSession(path string, displayNames map[string]string) (SessionMeta, error) {
 	head, tail, err := readHeadTailLines(path, 10, 30)
 	if err != nil {
 		return SessionMeta{}, err
@@ -85,6 +93,7 @@ func (p *openClawProvider) parseSession(path string) (SessionMeta, error) {
 	var projectDir string
 	var createdAt int64
 	var summary string
+	var firstUserMessage string
 	for _, line := range head {
 		var value map[string]any
 		if err := json.Unmarshal([]byte(line), &value); err != nil {
@@ -102,11 +111,19 @@ func (p *openClawProvider) parseSession(path string) (SessionMeta, error) {
 				projectDir = asString(value["cwd"])
 			}
 		case "message":
+			messageValue := asMap(value["message"])
+			if messageValue == nil {
+				continue
+			}
+			text := stripOpenClawMessageIDSuffix(extractText(messageValue["content"]))
+			if text == "" {
+				continue
+			}
 			if summary == "" {
-				text := extractText(asMap(value["message"])["content"])
-				if text != "" {
-					summary = truncateSummary(text, 160)
-				}
+				summary = truncateSummary(text, 160)
+			}
+			if firstUserMessage == "" && asString(messageValue["role"]) == "user" {
+				firstUserMessage = truncateSummary(text, titleMaxChars)
 			}
 		}
 	}
@@ -130,7 +147,7 @@ func (p *openClawProvider) parseSession(path string) (SessionMeta, error) {
 	messageCount, _ := p.countMessages(path)
 	return SessionMeta{
 		SessionID:    sessionID,
-		Title:        pathBasename(projectDir),
+		Title:        firstNonEmpty(displayNames[sessionID], firstUserMessage, pathBasename(projectDir)),
 		Summary:      summary,
 		ProjectDir:   projectDir,
 		CreatedAt:    createdAt,
@@ -138,6 +155,20 @@ func (p *openClawProvider) parseSession(path string) (SessionMeta, error) {
 		SourcePath:   path,
 		MessageCount: messageCount,
 	}, nil
+}
+
+func (p *openClawProvider) Delete(root, sourcePath, sessionID string) error {
+	meta, err := p.parseSession(sourcePath, nil)
+	if err != nil {
+		return err
+	}
+	if meta.SessionID != sessionID {
+		return fmt.Errorf("openclaw session ID mismatch: expected %s, found %s", sessionID, meta.SessionID)
+	}
+	if err := p.pruneSessionsIndex(filepath.Join(filepath.Dir(sourcePath), "sessions.json"), sessionID, sourcePath); err != nil {
+		return err
+	}
+	return removeFileIfExists(sourcePath)
 }
 
 func (p *openClawProvider) countMessages(path string) (int, error) {
@@ -153,4 +184,49 @@ func (p *openClawProvider) countMessages(path string) (int, error) {
 		return true
 	})
 	return count, err
+}
+
+func (p *openClawProvider) loadDisplayNames(sessionsDir string) map[string]string {
+	value, err := readJSONFile(filepath.Join(sessionsDir, "sessions.json"))
+	if err != nil {
+		return nil
+	}
+	result := make(map[string]string)
+	for _, entry := range value {
+		entryMap := asMap(entry)
+		if entryMap == nil {
+			continue
+		}
+		sessionID := asString(entryMap["sessionId"])
+		displayName := strings.TrimSpace(asString(entryMap["displayName"]))
+		if sessionID == "" || displayName == "" {
+			continue
+		}
+		result[sessionID] = truncateSummary(displayName, titleMaxChars)
+	}
+	return result
+}
+
+func (p *openClawProvider) pruneSessionsIndex(indexPath, sessionID, sourcePath string) error {
+	value, err := readJSONFile(indexPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for key, entry := range value {
+		entryMap := asMap(entry)
+		if entryMap == nil {
+			continue
+		}
+		if asString(entryMap["sessionId"]) == sessionID || asString(entryMap["sessionFile"]) == sourcePath {
+			delete(value, key)
+		}
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(indexPath, data, 0644)
 }

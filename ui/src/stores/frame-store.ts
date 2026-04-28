@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { create } from "zustand";
+import { pageRegistry } from "@/pages/registry";
 
 export type GroupType = "home" | "group" | "tool" | "settings";
 
@@ -93,6 +94,7 @@ export interface SettingsGroup {
   type: "settings";
   id: string;
   name: string;
+  activeCategory?: string;
 }
 
 export interface HomeGroup {
@@ -129,6 +131,8 @@ interface FrameState {
   addToolGroup: (pageId: string, name?: string, id?: string) => void;
   addTerminalGroup: () => void;
   addSettingsGroup: () => void;
+  openSettingsCategory: (category: string) => void;
+  setSettingsActiveCategory: (category: string | undefined) => void;
   removeGroup: (id: string) => void;
   setActiveGroup: (id: string) => void;
   getActiveGroup: () => PageGroup | undefined;
@@ -187,6 +191,7 @@ const createSettingsGroup = (): SettingsGroup => ({
   type: "settings",
   id: "settings",
   name: "Settings",
+  activeCategory: undefined,
 });
 
 const createHomeGroup = (): HomeGroup => ({
@@ -291,6 +296,15 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     })),
 
   addToolGroup: (pageId, name, id) => {
+    const { groups } = get();
+    const pageDef = pageRegistry.get(pageId);
+    if (pageDef?.singleton) {
+      const existing = groups.find((g) => g.type === "tool" && (g as ToolGroup).pageId === pageId);
+      if (existing) {
+        set({ activeGroupId: existing.id });
+        return;
+      }
+    }
     const group = createToolGroup(pageId, name, id);
     set((s) => ({ groups: [...s.groups, group], activeGroupId: group.id }));
   },
@@ -317,6 +331,24 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     const group = createSettingsGroup();
     set((s) => ({ groups: [...s.groups, group], activeGroupId: group.id }));
   },
+
+  openSettingsCategory: (category) =>
+    set((s) => {
+      const existing = s.groups.find((g) => g.type === "settings");
+      if (existing) {
+        return {
+          groups: s.groups.map((g) => (g.type === "settings" ? { ...g, activeCategory: category } : g)),
+          activeGroupId: existing.id,
+        };
+      }
+      const group = { ...createSettingsGroup(), activeCategory: category };
+      return { groups: [...s.groups, group], activeGroupId: group.id };
+    }),
+
+  setSettingsActiveCategory: (category) =>
+    set((s) => ({
+      groups: s.groups.map((g) => (g.type === "settings" ? { ...g, activeCategory: category } : g)),
+    })),
 
   removeGroup: (id) =>
     set((s) => {

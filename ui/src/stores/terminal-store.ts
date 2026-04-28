@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { TerminalCapabilities } from "@/api/terminal";
 
 export type TerminalStatus = "running" | "exited" | "closed";
 
@@ -8,6 +9,16 @@ export interface TerminalSession {
   pinned?: boolean;
   status?: TerminalStatus;
   parentId?: string;
+  runtimeType?: string;
+  readonly?: boolean;
+  capabilities?: TerminalCapabilities;
+  cwd?: string;
+  currentCwd?: string;
+  shellType?: string;
+  shellState?: string;
+  shellIntegration?: boolean;
+  lastCommand?: string;
+  lastCommandExitCode?: number | null;
 }
 
 export type SplitDirection = "horizontal" | "vertical";
@@ -45,10 +56,21 @@ function removeTerminalFromLayout(node: LayoutNode, terminalId: string): LayoutN
   return node;
 }
 
-function splitTerminalInLayout(node: LayoutNode, terminalId: string, newTerminalId: string, direction: SplitDirection): LayoutNode {
+function splitTerminalInLayout(
+  node: LayoutNode,
+  terminalId: string,
+  newTerminalId: string,
+  direction: SplitDirection
+): LayoutNode {
   if (node.type === "terminal") {
     if (node.terminalId === terminalId) {
-      return { type: "split", direction, ratio: 0.5, first: node, second: { type: "terminal", terminalId: newTerminalId } };
+      return {
+        type: "split",
+        direction,
+        ratio: 0.5,
+        first: node,
+        second: { type: "terminal", terminalId: newTerminalId },
+      };
     }
     return node;
   }
@@ -99,8 +121,10 @@ interface TerminalState {
   bulkSetTerminalLayouts: (layouts: Record<string, LayoutNode>) => void;
   getFocusedId: (groupId: string) => string | null;
   setFocusedId: (groupId: string, terminalId: string | null) => void;
+  getTerminalPageIds: (groupId: string, terminalId: string) => string[];
   splitTerminal: (rootId: string, targetPaneId: string, newTerminalId: string, direction: SplitDirection) => void;
   closeFromLayout: (groupId: string, terminalId: string) => void;
+  removeTerminalPage: (groupId: string, terminalId: string) => void;
   updateSplitRatio: (groupId: string, path: number[], ratio: number) => void;
   isSplit: (groupId: string) => boolean;
   getActiveLayoutTerminalIds: (groupId: string) => string[];
@@ -305,20 +329,31 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
       return { terminalLayouts: newLayouts };
     }),
 
-  bulkSetTerminalLayouts: (layouts) =>
-    set((s) => ({ terminalLayouts: { ...s.terminalLayouts, ...layouts } })),
+  bulkSetTerminalLayouts: (layouts) => set((s) => ({ terminalLayouts: { ...s.terminalLayouts, ...layouts } })),
 
   getFocusedId: (groupId) => get().focusedIdByGroup[groupId] || null,
 
   setFocusedId: (groupId, terminalId) =>
     set((s) => ({ focusedIdByGroup: { ...s.focusedIdByGroup, [groupId]: terminalId } })),
 
+  getTerminalPageIds: (groupId, terminalId) => {
+    const terminals = get().terminalsByGroup[groupId] || [];
+    const terminal = terminals.find((item) => item.id === terminalId);
+    if (!terminal) return [];
+    const rootId = terminal.parentId || terminal.id;
+    const layout = get().terminalLayouts[rootId];
+    return layout ? findTerminalIds(layout) : [rootId];
+  },
+
   splitTerminal: (rootId, targetPaneId, newTerminalId, direction) =>
     set((s) => {
       const layout = s.terminalLayouts[rootId];
       if (!layout) return s;
       return {
-        terminalLayouts: { ...s.terminalLayouts, [rootId]: splitTerminalInLayout(layout, targetPaneId, newTerminalId, direction) },
+        terminalLayouts: {
+          ...s.terminalLayouts,
+          [rootId]: splitTerminalInLayout(layout, targetPaneId, newTerminalId, direction),
+        },
       };
     }),
 
@@ -344,6 +379,44 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
         }
       }
       return { terminalLayouts: newLayouts, focusedIdByGroup: { ...s.focusedIdByGroup, [groupId]: focusedId } };
+    }),
+
+  removeTerminalPage: (groupId, terminalId) =>
+    set((s) => {
+      const terminals = s.terminalsByGroup[groupId] || [];
+      const terminal = terminals.find((item) => item.id === terminalId);
+      if (!terminal) return s;
+
+      const rootId = terminal.parentId || terminal.id;
+      const layout = s.terminalLayouts[rootId];
+      const terminalIds = layout ? findTerminalIds(layout) : [rootId];
+      const idsToRemove = new Set(terminalIds);
+      const newTerminals = terminals.filter((item) => !idsToRemove.has(item.id));
+      const newLayouts = { ...s.terminalLayouts };
+      delete newLayouts[rootId];
+
+      const roots = newTerminals.filter((item) => !item.parentId);
+      let activeId = s.activeIdByGroup[groupId];
+      if (!activeId || idsToRemove.has(activeId)) {
+        activeId = roots.length > 0 ? roots[roots.length - 1].id : null;
+      }
+
+      let focusedId = s.focusedIdByGroup[groupId];
+      if (!focusedId || idsToRemove.has(focusedId)) {
+        if (activeId) {
+          const activeLayout = newLayouts[activeId];
+          focusedId = activeLayout ? findTerminalIds(activeLayout)[0] || activeId : activeId;
+        } else {
+          focusedId = null;
+        }
+      }
+
+      return {
+        terminalsByGroup: { ...s.terminalsByGroup, [groupId]: newTerminals },
+        activeIdByGroup: { ...s.activeIdByGroup, [groupId]: activeId },
+        terminalLayouts: newLayouts,
+        focusedIdByGroup: { ...s.focusedIdByGroup, [groupId]: focusedId },
+      };
     }),
 
   updateSplitRatio: (groupId, path, ratio) =>
@@ -373,5 +446,11 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
   },
 
   reset: () =>
-    set({ terminalsByGroup: {}, activeIdByGroup: {}, listManagerOpenByGroup: {}, terminalLayouts: {}, focusedIdByGroup: {} }),
+    set({
+      terminalsByGroup: {},
+      activeIdByGroup: {},
+      listManagerOpenByGroup: {},
+      terminalLayouts: {},
+      focusedIdByGroup: {},
+    }),
 }));

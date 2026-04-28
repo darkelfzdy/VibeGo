@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import en from "./locales/en.json";
-import zh from "./locales/zh.json";
+import en from "@/lib/i18n/locales/en.json";
+import zh from "@/lib/i18n/locales/zh.json";
 
 export type Locale = "en" | "zh";
 

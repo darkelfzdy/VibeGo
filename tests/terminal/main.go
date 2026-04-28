@@ -52,7 +52,7 @@ func main() {
 	})
 
 	r.GET("/api/terminals", func(c *gin.Context) {
-		sessions, err := manager.List()
+		sessions, err := manager.List("", "")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

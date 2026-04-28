@@ -22,6 +22,7 @@ func (h *SettingsHandler) Register(r *gin.RouterGroup) {
 	g.POST("/set", h.Set)
 	g.GET("/get", h.Get)
 	g.POST("/reset", h.Reset)
+	g.DELETE("/:key", h.Delete)
 }
 
 // List godoc
@@ -104,6 +105,19 @@ func (h *SettingsHandler) Get(c *gin.Context) {
 // @Router /api/settings/reset [post]
 func (h *SettingsHandler) Reset(c *gin.Context) {
 	if err := h.store.Clear(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (h *SettingsHandler) Delete(c *gin.Context) {
+	key := c.Param("key")
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "key is required"})
+		return
+	}
+	if err := h.store.Delete(key); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

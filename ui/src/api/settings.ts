@@ -1,4 +1,4 @@
-import { request } from "./request";
+import { request } from "@/api/request";
 
 export const settingsApi = {
   list: () => request<Record<string, string>>("/settings/list"),
@@ -9,6 +9,11 @@ export const settingsApi = {
     request<{ ok: boolean }>("/settings/set", {
       method: "POST",
       body: JSON.stringify({ key, value }),
+    }),
+
+  delete: (key: string) =>
+    request<{ ok: boolean }>(`/settings/${encodeURIComponent(key)}`, {
+      method: "DELETE",
     }),
 
   reset: () => request<{ ok: boolean }>("/settings/reset", { method: "POST" }),

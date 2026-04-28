@@ -1,16 +1,10 @@
 package handler
 
 import (
-	"io"
-	"os/exec"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
-
-	"github.com/go-git/go-git/v6"
-	"github.com/go-git/go-git/v6/plumbing"
-	"github.com/go-git/go-git/v6/plumbing/object"
 )
 
 type BranchStatusInfo struct {
@@ -20,13 +14,14 @@ type BranchStatusInfo struct {
 	Behind   int    `json:"behind"`
 }
 
-func collectFileStatus(repo *git.Repository) []FileStatus {
-	w, err := repo.Worktree()
-	if err != nil {
-		return []FileStatus{}
-	}
-	repoRoot := w.Filesystem.Root()
-	cmd := exec.Command("git", "status", "--porcelain=v1", "-z")
+type BranchesSnapshot struct {
+	Branches       []string `json:"branches"`
+	RemoteBranches []string `json:"remoteBranches"`
+	CurrentBranch  string   `json:"currentBranch"`
+}
+
+func collectFileStatus(repoRoot string) []FileStatus {
+	cmd := newGitCommand("status", "--porcelain=v1", "-z")
 	cmd.Dir = repoRoot
 	output, err := cmd.Output()
 	if err != nil {
@@ -67,42 +62,68 @@ func collectFileStatus(repo *git.Repository) []FileStatus {
 	return files
 }
 
-func collectCommitLog(repo *git.Repository, limit int) []CommitInfo {
+func collectStatusFingerprint(repoRoot string) string {
+	cmd := newGitCommand("status", "--porcelain=v1", "-z", "--untracked-files=all")
+	cmd.Dir = repoRoot
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return string(output)
+}
+
+func collectCommitLog(repoRoot string, limit int) []CommitInfo {
 	if limit <= 0 {
 		limit = 20
 	}
-	ref, err := repo.Head()
-	if err != nil {
-		return []CommitInfo{}
-	}
-	iter, err := repo.Log(&git.LogOptions{From: ref.Hash()})
+	format := strings.Join([]string{"%H", "%s", "%an", "%ae", "%aI", "%P"}, "%x00")
+	cmd := newGitCommand("log", "-n", strconv.Itoa(limit),
+		fmt.Sprintf("--format=%s", format), "--no-decorate")
+	cmd.Dir = repoRoot
+	output, err := cmd.Output()
 	if err != nil {
 		return []CommitInfo{}
 	}
 	var commits []CommitInfo
-	count := 0
-	_ = iter.ForEach(func(c *object.Commit) error {
-		if count >= limit {
-			return io.EOF
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "\x00", 6)
+		if len(parts) < 6 {
+			continue
+		}
+		parentCount := 0
+		if strings.TrimSpace(parts[5]) != "" {
+			parentCount = len(strings.Fields(parts[5]))
 		}
 		commits = append(commits, CommitInfo{
-			Hash:        c.Hash.String(),
-			Message:     c.Message,
-			Author:      c.Author.Name,
-			AuthorEmail: c.Author.Email,
-			Date:        c.Author.When.Format(time.RFC3339),
-			ParentCount: c.NumParents(),
+			Hash:        parts[0],
+			Message:     parts[1],
+			Author:      parts[2],
+			AuthorEmail: parts[3],
+			Date:        parts[4],
+			ParentCount: parentCount,
 		})
-		count++
-		return nil
-	})
+	}
 	return commits
+}
+
+func collectHeadHash(repoRoot string) string {
+	cmd := newGitCommand("rev-parse", "HEAD")
+	cmd.Dir = repoRoot
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
 }
 
 func collectBranchStatus(repoRoot string) *BranchStatusInfo {
 	info := &BranchStatusInfo{}
 
-	cmd := exec.Command("git", "branch", "--show-current")
+	cmd := newGitCommand("branch", "--show-current")
 	cmd.Dir = repoRoot
 	out, err := cmd.Output()
 	if err != nil {
@@ -113,7 +134,7 @@ func collectBranchStatus(repoRoot string) *BranchStatusInfo {
 		return info
 	}
 
-	cmd = exec.Command("git", "rev-parse", "--abbrev-ref", info.Branch+"@{upstream}")
+	cmd = newGitCommand("rev-parse", "--abbrev-ref", info.Branch+"@{upstream}")
 	cmd.Dir = repoRoot
 	out, err = cmd.Output()
 	if err != nil {
@@ -121,7 +142,7 @@ func collectBranchStatus(repoRoot string) *BranchStatusInfo {
 	}
 	info.Upstream = strings.TrimSpace(string(out))
 
-	cmd = exec.Command("git", "rev-list", "--left-right", "--count", info.Upstream+"...HEAD")
+	cmd = newGitCommand("rev-list", "--left-right", "--count", info.Upstream+"...HEAD")
 	cmd.Dir = repoRoot
 	out, err = cmd.Output()
 	if err != nil {
@@ -135,41 +156,131 @@ func collectBranchStatus(repoRoot string) *BranchStatusInfo {
 	return info
 }
 
-func collectConflictFiles(repo *git.Repository) []string {
-	w, err := repo.Worktree()
-	if err != nil {
-		return nil
+func collectBranchesSnapshot(repoRoot string) BranchesSnapshot {
+	currentBranch := ""
+	cmd := newGitCommand("branch", "--show-current")
+	cmd.Dir = repoRoot
+	out, err := cmd.Output()
+	if err == nil {
+		currentBranch = strings.TrimSpace(string(out))
 	}
-	status, err := w.Status()
+
+	cmd = newGitCommand("branch", "--format=%(refname:short)")
+	cmd.Dir = repoRoot
+	out, err = cmd.Output()
+	if err != nil {
+		return BranchesSnapshot{CurrentBranch: currentBranch}
+	}
+
+	var branchList []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line != "" {
+			branchList = append(branchList, line)
+		}
+	}
+	sort.Strings(branchList)
+
+	return BranchesSnapshot{
+		Branches:       branchList,
+		RemoteBranches: collectRemoteBranches(repoRoot),
+		CurrentBranch:  currentBranch,
+	}
+}
+
+func collectConflictFiles(repoRoot string) []string {
+	cmd := newGitCommand("diff", "--name-only", "--diff-filter=U")
+	cmd.Dir = repoRoot
+	output, err := cmd.Output()
 	if err != nil {
 		return nil
 	}
 	var conflicts []string
-	for p, s := range status {
-		if s.Worktree == git.UpdatedButUnmerged || s.Staging == git.UpdatedButUnmerged {
-			conflicts = append(conflicts, p)
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if line != "" {
+			conflicts = append(conflicts, line)
 		}
 	}
 	sort.Strings(conflicts)
 	return conflicts
 }
 
-func collectRemoteBranches(repo *git.Repository) []string {
-	refs, err := repo.References()
+func collectRemoteBranches(repoRoot string) []string {
+	cmd := newGitCommand("branch", "-r", "--format=%(refname:short)")
+	cmd.Dir = repoRoot
+	out, err := cmd.Output()
 	if err != nil {
 		return nil
 	}
 	var remote []string
-	_ = refs.ForEach(func(ref *plumbing.Reference) error {
-		name := ref.Name().String()
-		if strings.HasPrefix(name, "refs/remotes/") {
-			short := strings.TrimPrefix(name, "refs/remotes/")
-			if !strings.HasSuffix(short, "/HEAD") {
-				remote = append(remote, short)
-			}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line != "" && !strings.HasSuffix(line, "/HEAD") {
+			remote = append(remote, line)
 		}
-		return nil
-	})
+	}
 	sort.Strings(remote)
 	return remote
+}
+
+func collectRemoteInfos(repoRoot string) []RemoteInfo {
+	cmd := newGitCommand("remote")
+	cmd.Dir = repoRoot
+	output, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+
+	names := strings.Split(strings.TrimSpace(string(output)), "\n")
+	result := make([]RemoteInfo, 0, len(names))
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		urlCmd := newGitCommand("remote", "get-url", "--all", name)
+		urlCmd.Dir = repoRoot
+		urlOut, err := urlCmd.Output()
+		if err != nil {
+			continue
+		}
+		var urls []string
+		for _, u := range strings.Split(strings.TrimSpace(string(urlOut)), "\n") {
+			if u != "" {
+				urls = append(urls, u)
+			}
+		}
+		sort.Strings(urls)
+		result = append(result, RemoteInfo{
+			Name: name,
+			URLs: urls,
+		})
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Name < result[j].Name
+	})
+
+	return result
+}
+
+func collectStashEntries(repoRoot string) []StashEntry {
+	cmd := newGitCommand("stash", "list")
+	cmd.Dir = repoRoot
+	output, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+
+	var entries []StashEntry
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for i, line := range lines {
+		if line == "" {
+			continue
+		}
+		entries = append(entries, StashEntry{
+			Index:   i,
+			Message: line,
+		})
+	}
+
+	return entries
 }

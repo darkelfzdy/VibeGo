@@ -53,6 +53,22 @@ func (p *claudeProvider) LoadMessages(sourcePath string) ([]SessionMessage, erro
 			return true
 		}
 		role := asString(messageValue["role"])
+		if role == "user" {
+			items := asArray(messageValue["content"])
+			if len(items) > 0 {
+				allToolResults := true
+				for _, item := range items {
+					itemMap := asMap(item)
+					if itemMap == nil || asString(itemMap["type"]) != "tool_result" {
+						allToolResults = false
+						break
+					}
+				}
+				if allToolResults {
+					role = "tool"
+				}
+			}
+		}
 		if role == "" {
 			role = "unknown"
 		}
@@ -75,6 +91,7 @@ func (p *claudeProvider) parseSession(path string) (SessionMeta, error) {
 	var sessionID string
 	var projectDir string
 	var createdAt int64
+	var firstUserMessage string
 	for _, line := range head {
 		var value map[string]any
 		if err := json.Unmarshal([]byte(line), &value); err != nil {
@@ -89,10 +106,25 @@ func (p *claudeProvider) parseSession(path string) (SessionMeta, error) {
 		if createdAt == 0 {
 			createdAt = parseTimestampToMillis(value["timestamp"])
 		}
+		if firstUserMessage == "" {
+			isUser := asString(value["type"]) == "user"
+			if !isUser {
+				messageValue := asMap(value["message"])
+				isUser = asString(messageValue["role"]) == "user"
+			}
+			if isUser {
+				messageValue := asMap(value["message"])
+				text := strings.TrimSpace(extractText(messageValue["content"]))
+				if text != "" && !strings.Contains(text, "<local-command-caveat>") && !strings.HasPrefix(text, "<command-name>") {
+					firstUserMessage = truncateSummary(text, titleMaxChars)
+				}
+			}
+		}
 	}
 
 	var lastActiveAt int64
 	var summary string
+	var customTitle string
 	for index := len(tail) - 1; index >= 0; index-- {
 		var value map[string]any
 		if err := json.Unmarshal([]byte(tail[index]), &value); err != nil {
@@ -100,6 +132,12 @@ func (p *claudeProvider) parseSession(path string) (SessionMeta, error) {
 		}
 		if lastActiveAt == 0 {
 			lastActiveAt = parseTimestampToMillis(value["timestamp"])
+		}
+		if customTitle == "" && asString(value["type"]) == "custom-title" {
+			customTitle = strings.TrimSpace(asString(value["customTitle"]))
+			if customTitle != "" {
+				customTitle = truncateSummary(customTitle, titleMaxChars)
+			}
 		}
 		if summary == "" && !asBool(value["isMeta"]) {
 			messageValue := asMap(value["message"])
@@ -124,15 +162,31 @@ func (p *claudeProvider) parseSession(path string) (SessionMeta, error) {
 
 	messageCount, _ := p.countMessages(path)
 	return SessionMeta{
-		SessionID:    sessionID,
-		Title:        pathBasename(projectDir),
-		Summary:      summary,
-		ProjectDir:   projectDir,
-		CreatedAt:    createdAt,
-		LastActiveAt: lastActiveAt,
-		SourcePath:   path,
-		MessageCount: messageCount,
+		SessionID:     sessionID,
+		Title:         firstNonEmpty(customTitle, firstUserMessage, pathBasename(projectDir)),
+		Summary:       summary,
+		ProjectDir:    projectDir,
+		ResumeCommand: fmt.Sprintf("claude --resume %s", sessionID),
+		CreatedAt:     createdAt,
+		LastActiveAt:  lastActiveAt,
+		SourcePath:    path,
+		MessageCount:  messageCount,
 	}, nil
+}
+
+func (p *claudeProvider) Delete(root, sourcePath, sessionID string) error {
+	meta, err := p.parseSession(sourcePath)
+	if err != nil {
+		return err
+	}
+	if meta.SessionID != sessionID {
+		return fmt.Errorf("claude session ID mismatch: expected %s, found %s", sessionID, meta.SessionID)
+	}
+	sidecar := strings.TrimSuffix(sourcePath, filepath.Ext(sourcePath))
+	if err := removeAllIfExists(sidecar); err != nil {
+		return err
+	}
+	return removeFileIfExists(sourcePath)
 }
 
 func (p *claudeProvider) countMessages(path string) (int, error) {

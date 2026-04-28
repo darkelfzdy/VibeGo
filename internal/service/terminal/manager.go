@@ -26,7 +26,7 @@ type terminalConnection struct {
 
 type activeTerminal struct {
 	ID            string
-	PTY           slave
+	Runtime       TerminalRuntime
 	Session       *model.TerminalSession
 	Connections   sync.Map
 	Done          chan struct{}
@@ -36,6 +36,7 @@ type activeTerminal struct {
 	flushTicker   *time.Ticker
 	bufferSize    int
 	encoder       *base64.Encoding
+	capabilities  TerminalCapabilities
 }
 
 type Manager struct {
@@ -52,6 +53,7 @@ type Manager struct {
 	wsPingInterval       time.Duration
 	wsReadTimeout        time.Duration
 	wsWriteTimeout       time.Duration
+	snapshotStore        TerminalSnapshotStore
 }
 
 type replaySnapshot struct {
@@ -78,7 +80,12 @@ func NewManager(db *gorm.DB, cfg *ManagerConfig) *Manager {
 		wsPingInterval:       cfg.WSPingInterval,
 		wsReadTimeout:        cfg.WSReadTimeout,
 		wsWriteTimeout:       cfg.WSWriteTimeout,
+		snapshotStore:        NewDBTerminalSnapshotStore(db),
 	}
+}
+
+func (m *Manager) DB() *gorm.DB {
+	return m.db
 }
 
 func (m *Manager) Create(opts CreateOptions) (*TerminalInfo, error) {
@@ -110,19 +117,28 @@ func (m *Manager) Create(opts CreateOptions) (*TerminalInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	runtime := NewLocalPTYRuntime(pty)
+	capabilities := runtime.Capabilities()
 
 	now := time.Now().Unix()
 	session := &model.TerminalSession{
-		ID:        uuid.New().String(),
-		UserID:    opts.UserID,
-		Name:      name,
-		Shell:     m.shell,
-		Cwd:       cwd,
-		Cols:      cols,
-		Rows:      rows,
-		Status:    model.StatusRunning,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:                 uuid.New().String(),
+		UserID:             opts.UserID,
+		WorkspaceSessionID: opts.WorkspaceSessionID,
+		GroupID:            opts.GroupID,
+		ParentID:           opts.ParentID,
+		Name:               name,
+		Shell:              m.shell,
+		Cwd:                cwd,
+		CurrentCwd:         cwd,
+		Cols:               cols,
+		Rows:               rows,
+		RuntimeType:        runtime.Type(),
+		Readonly:           false,
+		Status:             model.StatusRunning,
+		ShellIntegration:   capabilities.ShellIntegration,
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
 
 	if err := m.db.Create(session).Error; err != nil {
@@ -132,20 +148,21 @@ func (m *Manager) Create(opts CreateOptions) (*TerminalInfo, error) {
 
 	active := &activeTerminal{
 		ID:            session.ID,
-		PTY:           pty,
+		Runtime:       runtime,
 		Session:       session,
 		Done:          make(chan struct{}),
 		historyBuffer: newHistoryBuffer(m.historyBufferSize),
 		flushTicker:   time.NewTicker(m.historyFlushInterval),
 		bufferSize:    m.bufferSize,
 		encoder:       base64.StdEncoding,
+		capabilities:  capabilities,
 	}
 	active.status.Store(model.StatusRunning)
 
 	m.terminals.Store(session.ID, active)
 
 	go m.ptyReadLoop(active)
-	go m.monitorPTY(active, pty)
+	go m.monitorRuntime(active)
 	go m.flushHistory(active)
 
 	return sessionToInfo(session), nil
@@ -172,15 +189,29 @@ func (m *Manager) Get(id string) (*TerminalInfo, bool) {
 		return nil, false
 	}
 	return &TerminalInfo{
-		ID:        at.Session.ID,
-		Name:      at.Session.Name,
-		Shell:     at.Session.Shell,
-		Cwd:       at.Session.Cwd,
-		Cols:      at.Session.Cols,
-		Rows:      at.Session.Rows,
-		Status:    at.status.Load().(string),
-		CreatedAt: at.Session.CreatedAt,
-		UpdatedAt: at.Session.UpdatedAt,
+		ID:                  at.Session.ID,
+		Name:                at.Session.Name,
+		Shell:               at.Session.Shell,
+		Cwd:                 at.Session.Cwd,
+		CurrentCwd:          at.Session.CurrentCwd,
+		Cols:                at.Session.Cols,
+		Rows:                at.Session.Rows,
+		RuntimeType:         at.Session.RuntimeType,
+		Readonly:            at.Session.Readonly,
+		Capabilities:        at.capabilities,
+		Status:              at.status.Load().(string),
+		WorkspaceSessionID:  at.Session.WorkspaceSessionID,
+		GroupID:             at.Session.GroupID,
+		ParentID:            at.Session.ParentID,
+		ShellType:           at.Session.ShellType,
+		ShellState:          at.Session.ShellState,
+		ShellIntegration:    at.Session.ShellIntegration,
+		LastCommand:         at.Session.LastCommand,
+		LastCommandExitCode: at.Session.LastCommandExitCode,
+		ExitCode:            at.Session.ExitCode,
+		HistorySize:         at.Session.HistorySize,
+		CreatedAt:           at.Session.CreatedAt,
+		UpdatedAt:           at.Session.UpdatedAt,
 	}, true
 }
 
@@ -190,7 +221,7 @@ func (m *Manager) Resize(id string, cols, rows int) error {
 		return ErrTerminalNotFound
 	}
 
-	if err := at.PTY.ResizeTerminal(cols, rows); err != nil {
+	if err := at.Runtime.Resize(cols, rows); err != nil {
 		return err
 	}
 
@@ -228,6 +259,66 @@ func (m *Manager) Rename(id, name string) error {
 	return nil
 }
 
+func (m *Manager) UpdateShellMetadata(id string, update ShellMetadataUpdate) error {
+	now := time.Now().Unix()
+	updates := map[string]any{
+		"updated_at": now,
+	}
+
+	if update.CurrentCwd != nil {
+		updates["current_cwd"] = *update.CurrentCwd
+	}
+	if update.ShellType != nil {
+		updates["shell_type"] = *update.ShellType
+	}
+	if update.ShellState != nil {
+		updates["shell_state"] = *update.ShellState
+	}
+	if update.ShellIntegration != nil {
+		updates["shell_integration"] = *update.ShellIntegration
+	}
+	if update.LastCommand != nil {
+		updates["last_command"] = *update.LastCommand
+	}
+	if update.LastCommandExitCode != nil {
+		updates["last_command_exit_code"] = *update.LastCommandExitCode
+	}
+
+	result := m.db.Model(&model.TerminalSession{}).Where("id = ?", id).Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrTerminalNotFound
+	}
+
+	if at, ok := m.getActive(id); ok {
+		if update.CurrentCwd != nil {
+			at.Session.CurrentCwd = *update.CurrentCwd
+		}
+		if update.ShellType != nil {
+			at.Session.ShellType = *update.ShellType
+		}
+		if update.ShellState != nil {
+			at.Session.ShellState = *update.ShellState
+		}
+		if update.ShellIntegration != nil {
+			at.Session.ShellIntegration = *update.ShellIntegration
+			at.capabilities.ShellIntegration = *update.ShellIntegration
+		}
+		if update.LastCommand != nil {
+			at.Session.LastCommand = *update.LastCommand
+		}
+		if update.LastCommandExitCode != nil {
+			exitCode := *update.LastCommandExitCode
+			at.Session.LastCommandExitCode = &exitCode
+		}
+		at.Session.UpdatedAt = now
+	}
+
+	return nil
+}
+
 func (m *Manager) Close(id string) error {
 	val, ok := m.terminals.LoadAndDelete(id)
 	if !ok {
@@ -247,26 +338,61 @@ func (m *Manager) Close(id string) error {
 	m.flushHistoryToDB(at)
 	at.historyMu.Unlock()
 
-	at.PTY.Close()
+	_ = at.Runtime.Close()
 	close(at.Done)
 
 	now := time.Now().Unix()
 	at.status.Store(model.StatusClosed)
 	at.Session.Status = model.StatusClosed
+	at.Session.Readonly = true
 	at.Session.UpdatedAt = now
 	m.db.Model(&model.TerminalSession{}).Where("id = ?", id).Updates(map[string]any{
 		"status":     model.StatusClosed,
+		"readonly":   true,
 		"updated_at": now,
 	})
 
 	return nil
 }
 
+func (m *Manager) collectDeleteIDs(id string) ([]string, error) {
+	if id == "" {
+		return nil, nil
+	}
+
+	var childIDs []string
+	if err := m.db.Model(&model.TerminalSession{}).Where("parent_id = ?", id).Pluck("id", &childIDs).Error; err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, 0, len(childIDs)+1)
+	ids = append(ids, id)
+	ids = append(ids, childIDs...)
+	return ids, nil
+}
+
 func (m *Manager) Delete(id string) error {
-	m.Close(id)
-	m.db.Where("session_id = ?", id).Delete(&model.TerminalHistory{})
-	m.db.Where("id = ?", id).Delete(&model.TerminalSession{})
-	return nil
+	ids, err := m.collectDeleteIDs(id)
+	if err != nil {
+		return err
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	for _, terminalID := range ids {
+		m.Close(terminalID)
+	}
+
+	return m.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("session_id IN ?", ids).Delete(&model.TerminalHistory{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("id IN ?", ids).Delete(&model.TerminalSession{}).Error; err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 func (m *Manager) ptyReadLoop(at *activeTerminal) {
@@ -280,7 +406,7 @@ func (m *Manager) ptyReadLoop(at *activeTerminal) {
 		default:
 		}
 
-		n, err := at.PTY.Read(buf)
+		n, err := at.Runtime.Read(buf)
 		if err != nil {
 			return
 		}
@@ -303,19 +429,21 @@ func (m *Manager) ptyReadLoop(at *activeTerminal) {
 	}
 }
 
-func (m *Manager) monitorPTY(at *activeTerminal, pty *localCommand) {
-	<-pty.ptyClosed
+func (m *Manager) monitorRuntime(at *activeTerminal) {
+	_ = at.Runtime.Wait(context.Background())
 
-	exitCode := pty.ExitCode()
+	exitCode := at.Runtime.ExitCode()
 	now := time.Now().Unix()
 
 	at.status.Store(model.StatusExited)
 	at.Session.Status = model.StatusExited
+	at.Session.Readonly = true
 	at.Session.ExitCode = exitCode
 	at.Session.UpdatedAt = now
 
 	m.db.Model(&model.TerminalSession{}).Where("id = ?", at.ID).Updates(map[string]any{
 		"status":     model.StatusExited,
+		"readonly":   true,
 		"exit_code":  exitCode,
 		"updated_at": now,
 	})
@@ -332,9 +460,16 @@ func (m *Manager) monitorPTY(at *activeTerminal, pty *localCommand) {
 	at.historyMu.Unlock()
 }
 
-func (m *Manager) List() ([]TerminalInfo, error) {
+func (m *Manager) List(workspaceSessionID string, groupID string) ([]TerminalInfo, error) {
 	var sessions []model.TerminalSession
-	if err := m.db.Order("updated_at DESC").Find(&sessions).Error; err != nil {
+	query := m.db.Order("updated_at DESC")
+	if workspaceSessionID != "" {
+		query = query.Where("workspace_session_id = ?", workspaceSessionID)
+	}
+	if groupID != "" {
+		query = query.Where("group_id = ?", groupID)
+	}
+	if err := query.Find(&sessions).Error; err != nil {
 		return nil, err
 	}
 	result := make([]TerminalInfo, len(sessions))
@@ -342,6 +477,67 @@ func (m *Manager) List() ([]TerminalInfo, error) {
 		result[i] = *sessionToInfo(&s)
 	}
 	return result, nil
+}
+
+func (m *Manager) SyncWorkspaceMetadata(workspaceSessionID string, assignments []WorkspaceTerminalAssignment) error {
+	if workspaceSessionID == "" {
+		return nil
+	}
+
+	return m.db.Transaction(func(tx *gorm.DB) error {
+		assignedIDs := make([]string, 0, len(assignments))
+		for _, assignment := range assignments {
+			if assignment.ID == "" {
+				continue
+			}
+			assignedIDs = append(assignedIDs, assignment.ID)
+			updates := map[string]any{
+				"workspace_session_id": workspaceSessionID,
+				"group_id":             assignment.GroupID,
+				"parent_id":            assignment.ParentID,
+			}
+			if err := tx.Model(&model.TerminalSession{}).Where("id = ?", assignment.ID).Updates(updates).Error; err != nil {
+				return err
+			}
+			if at, ok := m.getActive(assignment.ID); ok {
+				at.Session.WorkspaceSessionID = workspaceSessionID
+				at.Session.GroupID = assignment.GroupID
+				at.Session.ParentID = assignment.ParentID
+			}
+		}
+
+		clearQuery := tx.Model(&model.TerminalSession{}).Where("workspace_session_id = ?", workspaceSessionID)
+		if len(assignedIDs) > 0 {
+			clearQuery = clearQuery.Where("id NOT IN ?", assignedIDs)
+		}
+		if err := clearQuery.Updates(map[string]any{
+			"workspace_session_id": "",
+			"group_id":             "",
+		}).Error; err != nil {
+			return err
+		}
+
+		m.terminals.Range(func(_, value any) bool {
+			at := value.(*activeTerminal)
+			if at.Session.WorkspaceSessionID != workspaceSessionID {
+				return true
+			}
+			found := false
+			for _, assignment := range assignments {
+				if assignment.ID == at.Session.ID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				at.Session.WorkspaceSessionID = ""
+				at.Session.GroupID = ""
+			}
+			return true
+		})
+
+		return nil
+	})
 }
 
 func (m *Manager) Attach(id string, conn *websocket.Conn) (*Connection, error) {
@@ -431,31 +627,48 @@ func (m *Manager) sendHistoryOnly(id string, conn *websocket.Conn) (*Connection,
 		return nil, ErrTerminalNotFound
 	}
 
-	historyData, err := m.loadHistoryFromDB(id)
+	snapshot, err := m.loadSnapshot(id)
 	if err != nil {
 		return nil, ErrTerminalNotFound
 	}
 
 	m.configureWSConn(conn)
 	mst := newWSMaster(conn, m.wsWriteTimeout)
-	cursor := uint64(len(historyData))
+	cursor := uint64(0)
+	if snapshot != nil {
+		cursor = snapshot.Cursor
+	}
 
-	if len(historyData) > 0 {
+	if snapshot != nil && len(snapshot.Data) > 0 {
 		m.sendMessage(mst, WSMessage{
 			Type:   MsgTypeReplay,
-			Data:   base64.StdEncoding.EncodeToString(historyData),
+			Data:   base64.StdEncoding.EncodeToString(snapshot.Data),
 			Cursor: cursor,
 			Reset:  true,
 		})
 	}
 	m.sendReplayDone(mst)
 	m.sendMessage(mst, WSMessage{
-		Type:     MsgTypeState,
-		Status:   session.Status,
-		Cols:     session.Cols,
-		Rows:     session.Rows,
-		Cursor:   cursor,
-		ExitCode: session.ExitCode,
+		Type:        MsgTypeState,
+		Status:      session.Status,
+		Cols:        session.Cols,
+		Rows:        session.Rows,
+		Cursor:      cursor,
+		ExitCode:    session.ExitCode,
+		RuntimeType: session.RuntimeType,
+		Readonly:    session.Readonly,
+		Capabilities: TerminalCapabilities{
+			Resume:           true,
+			Snapshot:         true,
+			ShellIntegration: session.ShellIntegration,
+			Durable:          false,
+		},
+		CurrentCwd:          session.CurrentCwd,
+		ShellType:           session.ShellType,
+		ShellState:          session.ShellState,
+		ShellIntegration:    session.ShellIntegration,
+		LastCommand:         session.LastCommand,
+		LastCommandExitCode: session.LastCommandExitCode,
 	})
 	if session.Status != model.StatusRunning {
 		m.sendMessage(mst, WSMessage{Type: MsgTypePtyExited})
@@ -496,11 +709,42 @@ func (m *Manager) getReplaySnapshot(at *activeTerminal, cursor uint64) replaySna
 	_, endCursor = at.historyBuffer.CursorRange()
 	at.historyMu.RUnlock()
 
+	if m.snapshotStore != nil {
+		if snapshot, err := m.snapshotStore.Load(at.ID); err == nil && snapshot != nil && len(snapshot.Data) > 0 {
+			return replaySnapshot{
+				data:   snapshot.Data,
+				cursor: snapshot.Cursor,
+				reset:  true,
+			}
+		}
+	}
+
 	return replaySnapshot{
 		data:   historyData,
 		cursor: endCursor,
 		reset:  true,
 	}
+}
+
+func (m *Manager) loadSnapshot(sessionID string) (*TerminalSnapshot, error) {
+	if m.snapshotStore == nil {
+		return nil, nil
+	}
+	return m.snapshotStore.Load(sessionID)
+}
+
+func (m *Manager) saveSnapshot(snapshot *TerminalSnapshot) error {
+	if m.snapshotStore == nil {
+		return nil
+	}
+	return m.snapshotStore.Save(snapshot)
+}
+
+func (m *Manager) deleteSnapshot(sessionID string) error {
+	if m.snapshotStore == nil {
+		return nil
+	}
+	return m.snapshotStore.Delete(sessionID)
 }
 
 func (m *Manager) sendReplayDone(mst master) error {
@@ -510,12 +754,21 @@ func (m *Manager) sendReplayDone(mst master) error {
 func (m *Manager) sendTerminalState(at *activeTerminal, mst master) error {
 	_, cursor := at.historyBuffer.CursorRange()
 	msg := WSMessage{
-		Type:     MsgTypeState,
-		Status:   at.status.Load().(string),
-		Cols:     at.Session.Cols,
-		Rows:     at.Session.Rows,
-		Cursor:   cursor,
-		ExitCode: at.Session.ExitCode,
+		Type:                MsgTypeState,
+		Status:              at.status.Load().(string),
+		Cols:                at.Session.Cols,
+		Rows:                at.Session.Rows,
+		Cursor:              cursor,
+		ExitCode:            at.Session.ExitCode,
+		RuntimeType:         at.Session.RuntimeType,
+		Readonly:            at.Session.Readonly,
+		Capabilities:        at.capabilities,
+		CurrentCwd:          at.Session.CurrentCwd,
+		ShellType:           at.Session.ShellType,
+		ShellState:          at.Session.ShellState,
+		ShellIntegration:    at.Session.ShellIntegration,
+		LastCommand:         at.Session.LastCommand,
+		LastCommandExitCode: at.Session.LastCommandExitCode,
 	}
 	return m.sendMessage(mst, msg)
 }
@@ -577,14 +830,14 @@ func (m *Manager) readClientLoop(at *activeTerminal, conn *terminalConnection) e
 			if err != nil || len(decoded) == 0 {
 				continue
 			}
-			if _, err := at.PTY.Write(decoded); err != nil {
+			if _, err := at.Runtime.Write(decoded); err != nil {
 				return err
 			}
 		case MsgTypeResize:
 			if msg.Cols <= 0 || msg.Rows <= 0 {
 				continue
 			}
-			if err := at.PTY.ResizeTerminal(msg.Cols, msg.Rows); err != nil {
+			if err := at.Runtime.Resize(msg.Cols, msg.Rows); err != nil {
 				continue
 			}
 			now := time.Now().Unix()

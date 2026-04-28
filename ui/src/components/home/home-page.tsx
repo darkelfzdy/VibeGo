@@ -1,8 +1,8 @@
 import { FolderOpen, Terminal } from "lucide-react";
 import React, { useCallback, useState } from "react";
 import DirectoryPicker from "@/components/common/directory-picker";
+import RecentSessionList from "@/components/home/recent-session-list";
 import { type Locale, useTranslation } from "@/lib/i18n";
-import RecentSessionList from "./recent-session-list";
 
 interface HomePageProps {
   onOpenFolder: (path: string) => void;

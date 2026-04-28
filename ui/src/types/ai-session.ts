@@ -18,6 +18,7 @@ export interface AISessionMeta {
   title?: string;
   summary?: string;
   projectDir?: string;
+  resumeCommand?: string;
   createdAt?: number;
   lastActiveAt?: number;
   sourcePath: string;
@@ -64,6 +65,17 @@ export interface AIMessagesResponse {
   session: AISessionMeta;
   messages: AISessionMessage[];
   parseWarnings: string[];
+}
+
+export interface AIDeleteRequest {
+  providerId: string;
+  sessionId: string;
+  sourcePath: string;
+}
+
+export interface AIDeleteOutcome extends AIDeleteRequest {
+  success: boolean;
+  error?: string;
 }
 
 export const AI_PROVIDER_ORDER: AIProviderId[] = ["claude", "codex", "gemini", "opencode", "openclaw"];

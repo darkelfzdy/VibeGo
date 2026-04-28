@@ -25,8 +25,8 @@ func (p *openCodeProvider) DefaultRoots() []string {
 func (p *openCodeProvider) Scan(root string) ([]SessionMeta, error) {
 	sessionRoot := filepath.Join(root, "session")
 	paths, err := collectFiles(sessionRoot, func(path string, entry os.DirEntry) bool {
-			return filepath.Ext(path) == ".json"
-		})
+		return filepath.Ext(path) == ".json"
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -49,8 +49,8 @@ func (p *openCodeProvider) LoadMessages(sourcePath string) ([]SessionMessage, er
 	}
 	storageRoot := filepath.Dir(filepath.Dir(sourcePath))
 	messageFiles, err := collectFiles(sourcePath, func(path string, entry os.DirEntry) bool {
-			return filepath.Ext(path) == ".json"
-		})
+		return filepath.Ext(path) == ".json"
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -121,14 +121,15 @@ func (p *openCodeProvider) parseSession(storageRoot, path string) (SessionMeta, 
 		summary = p.firstUserSummary(storageRoot, sessionID)
 	}
 	return SessionMeta{
-		SessionID:    sessionID,
-		Title:        title,
-		Summary:      summary,
-		ProjectDir:   projectDir,
-		CreatedAt:    parseTimestampToMillis(asMap(value["time"])["created"]),
-		LastActiveAt: parseTimestampToMillis(asMap(value["time"])["updated"]),
-		SourcePath:   messageDir,
-		MessageCount: messageCount,
+		SessionID:     sessionID,
+		Title:         title,
+		Summary:       summary,
+		ProjectDir:    projectDir,
+		ResumeCommand: fmt.Sprintf("opencode session resume %s", sessionID),
+		CreatedAt:     parseTimestampToMillis(asMap(value["time"])["created"]),
+		LastActiveAt:  parseTimestampToMillis(asMap(value["time"])["updated"]),
+		SourcePath:    messageDir,
+		MessageCount:  messageCount,
 	}, nil
 }
 
@@ -218,4 +219,40 @@ func (p *openCodeProvider) collectPartsText(partDir string) string {
 		parts = append(parts, text)
 	}
 	return strings.Join(parts, "\n")
+}
+
+func (p *openCodeProvider) Delete(root, sourcePath, sessionID string) error {
+	if filepath.Base(sourcePath) != sessionID {
+		return fmt.Errorf("opencode session path does not match session ID: expected %s, found %s", sessionID, sourcePath)
+	}
+	messageFiles, err := collectFiles(sourcePath, func(path string, entry os.DirEntry) bool {
+		return filepath.Ext(path) == ".json"
+	})
+	if err != nil {
+		return err
+	}
+	messageIDs := make([]string, 0, len(messageFiles))
+	for _, path := range messageFiles {
+		value, err := readJSONFile(path)
+		if err != nil {
+			continue
+		}
+		messageID := asString(value["id"])
+		if messageID != "" {
+			messageIDs = append(messageIDs, messageID)
+		}
+	}
+	partRoot := filepath.Join(root, "part")
+	for _, messageID := range messageIDs {
+		if err := removeAllIfExists(filepath.Join(partRoot, messageID)); err != nil {
+			return err
+		}
+	}
+	if err := removeFileIfExists(filepath.Join(root, "session_diff", sessionID+".json")); err != nil {
+		return err
+	}
+	if err := removeAllIfExists(sourcePath); err != nil {
+		return err
+	}
+	return removeFileIfExists(filepath.Join(root, "session", sessionID+".json"))
 }

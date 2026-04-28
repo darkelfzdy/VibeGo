@@ -1,6 +1,8 @@
 import { FolderOpen, Terminal, X } from "lucide-react";
 import React from "react";
 import { type Locale, useTranslation } from "@/lib/i18n";
+import { isPageVisibleInNewPage } from "@/lib/page-visibility";
+import { useSettingsStore } from "@/lib/settings";
 import { pageRegistry } from "@/pages/registry";
 
 interface NewPageMenuProps {
@@ -21,7 +23,8 @@ const NewPageMenu: React.FC<NewPageMenuProps> = ({
   onNewTool,
 }) => {
   const t = useTranslation(locale);
-  const tools = pageRegistry.getAll().filter((p) => p.category === "tool");
+  const settings = useSettingsStore((s) => s.settings);
+  const tools = pageRegistry.getAll().filter((p) => p.category === "tool" && isPageVisibleInNewPage(p, settings));
 
   if (!isOpen) return null;
 
@@ -87,7 +90,17 @@ const NewPageMenu: React.FC<NewPageMenuProps> = ({
                   <IconComponent size={20} className="text-ide-accent" />
                 </div>
                 <div className="text-left">
-                  <div className="text-sm font-medium text-ide-text">{getToolName(tool)}</div>
+                  <div className="flex items-center gap-2 text-sm font-medium text-ide-text">
+                    <span>{getToolName(tool)}</span>
+                    {tool.tags?.map((tag) => (
+                      <span
+                        key={tag.labelKey}
+                        className="px-1.5 py-0.5 text-[10px] leading-none border border-ide-border text-ide-mute bg-ide-bg rounded"
+                      >
+                        {t(tag.labelKey)}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </button>
             );

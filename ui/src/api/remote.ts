@@ -1,4 +1,4 @@
-import { request } from "./request";
+import { request } from "@/api/request";
 
 export interface VolumeState {
   level: number;
@@ -7,7 +7,8 @@ export interface VolumeState {
 
 export const remoteApi = {
   getVolume: () => request<VolumeState>("/remote/volume"),
-  setVolume: (level: number) => request<{ ok: boolean; level: number }>("/remote/volume", { method: "POST", body: JSON.stringify({ level }) }),
+  setVolume: (level: number) =>
+    request<{ ok: boolean; level: number }>("/remote/volume", { method: "POST", body: JSON.stringify({ level }) }),
   volumeUp: () => request<{ ok: boolean }>("/remote/volume/up", { method: "POST" }),
   volumeDown: () => request<{ ok: boolean }>("/remote/volume/down", { method: "POST" }),
   volumeMute: () => request<{ ok: boolean }>("/remote/volume/mute", { method: "POST" }),
