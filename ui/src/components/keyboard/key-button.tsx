@@ -393,26 +393,6 @@ const KeyButton: React.FC<KeyButtonProps> = ({
     e.preventDefault();
   }, []);
 
-  const handleSubButtonPointerDown = useCallback(
-    (e: React.PointerEvent, value: string) => {
-      e.preventDefault();
-      e.stopPropagation();
-      clearTimers();
-      const s = stateRef.current;
-      s.isDown = false;
-      s.swiped = null;
-      s.isSliding = false;
-      s.isVoiceGesture = false;
-      s.voiceTarget = null;
-      setPressed(false);
-      setSwipeDir(null);
-      setSliding(false);
-      onVoiceTargetChange?.(null);
-      onKeyOutput(value, true);
-    },
-    [clearTimers, onKeyOutput, onVoiceTargetChange]
-  );
-
   const isFnKey = keyDef.type === "modifier" || keyDef.type === "action";
   const isSpace = keyDef.slider === "horizontal";
   const labelSmall = keyDef.label.length > 2;
@@ -461,23 +441,6 @@ const KeyButton: React.FC<KeyButtonProps> = ({
         const highlight = swipeDir === dir;
         const labelNode = DISPLAY_LABELS[sub] || sub;
         const isLongText = typeof labelNode === "string" && labelNode.length >= 3;
-        if (sub === "DismissKeyboard") {
-          return (
-            <button
-              key={dir}
-              type="button"
-              className={`tk-sub tk-sub--${dir} tk-sub-button${highlight ? " tk-sub--highlight" : ""}`}
-              aria-label="Dismiss keyboard"
-              onPointerDown={(e) => handleSubButtonPointerDown(e, sub)}
-              onPointerUp={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-            >
-              {labelNode}
-            </button>
-          );
-        }
         return (
           <span
             key={dir}

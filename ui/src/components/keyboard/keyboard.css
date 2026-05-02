@@ -150,30 +150,6 @@
 .tk-sub--s  { grid-area: 3 / 2; align-self: end; }
 .tk-sub--se { grid-area: 3 / 3; align-self: end; justify-self: end; padding: 0 2px 1px 0; }
 
-.tk-sub-button {
-  position: absolute;
-  top: 1px;
-  right: 2px;
-  z-index: 20;
-  display: inline-flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  width: 24px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--tk-text-sub);
-  font: inherit;
-  cursor: pointer;
-  pointer-events: auto;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.tk-sub-button:active {
-  color: var(--tk-text);
-}
-
 .tk-swipe-preview {
   position: absolute;
   bottom: 0;
