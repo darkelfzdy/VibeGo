@@ -458,6 +458,7 @@ func TestGitConflictDetailsAndResolveUseStdlibFileIO(t *testing.T) {
 	require.NoError(t, os.Symlink(gitPath, filepath.Join(gitOnlyDir, "git")))
 	originalPath := os.Getenv("PATH")
 	t.Setenv("PATH", gitOnlyDir)
+	t.Setenv("VG_GIT_SHELL_ENV", "0")
 	t.Cleanup(func() {
 		require.NoError(t, os.Setenv("PATH", originalPath))
 	})
