@@ -37,7 +37,7 @@ const VOICE_TARGET_MOVE_THRESHOLD = 28;
 const REPEAT_INTERVAL = 120;
 const VOICE_VERTICAL_THRESHOLD = 22;
 type KeyOutputAction = "start" | "stop" | "cancel" | "continue";
-export type VoiceReleaseTarget = "cancel" | "continue" | "commit";
+export type VoiceReleaseTarget = "cancel" | "continue" | "commit" | "none";
 
 const DISPLAY_LABELS: Record<string, React.ReactNode> = {
   ArrowUp: <ArrowUp size={12} strokeWidth={2.5} />,
@@ -181,8 +181,8 @@ const KeyButton: React.FC<KeyButtonProps> = ({
           navigator.vibrate?.(50);
           if (resolved.value === "Mic") {
             stateRef.current.isVoiceGesture = true;
-            stateRef.current.voiceTarget = "commit";
-            onVoiceTargetChange?.("commit");
+            stateRef.current.voiceTarget = "none";
+            onVoiceTargetChange?.("none");
             onKeyOutput("Mic", true, "start");
           }
           return;
@@ -235,8 +235,8 @@ const KeyButton: React.FC<KeyButtonProps> = ({
                 navigator.vibrate?.(50);
                 if (subVal === "Mic") {
                   stateRef.current.isVoiceGesture = true;
-                  stateRef.current.voiceTarget = "commit";
-                  onVoiceTargetChange?.("commit");
+                  stateRef.current.voiceTarget = "none";
+                  onVoiceTargetChange?.("none");
                   onKeyOutput("Mic", true, "start");
                 }
                 return;
@@ -393,26 +393,6 @@ const KeyButton: React.FC<KeyButtonProps> = ({
     e.preventDefault();
   }, []);
 
-  const handleSubButtonPointerDown = useCallback(
-    (e: React.PointerEvent, value: string) => {
-      e.preventDefault();
-      e.stopPropagation();
-      clearTimers();
-      const s = stateRef.current;
-      s.isDown = false;
-      s.swiped = null;
-      s.isSliding = false;
-      s.isVoiceGesture = false;
-      s.voiceTarget = null;
-      setPressed(false);
-      setSwipeDir(null);
-      setSliding(false);
-      onVoiceTargetChange?.(null);
-      onKeyOutput(value, true);
-    },
-    [clearTimers, onKeyOutput, onVoiceTargetChange]
-  );
-
   const isFnKey = keyDef.type === "modifier" || keyDef.type === "action";
   const isSpace = keyDef.slider === "horizontal";
   const labelSmall = keyDef.label.length > 2;
@@ -461,23 +441,6 @@ const KeyButton: React.FC<KeyButtonProps> = ({
         const highlight = swipeDir === dir;
         const labelNode = DISPLAY_LABELS[sub] || sub;
         const isLongText = typeof labelNode === "string" && labelNode.length >= 3;
-        if (sub === "DismissKeyboard") {
-          return (
-            <button
-              key={dir}
-              type="button"
-              className={`tk-sub tk-sub--${dir} tk-sub-button${highlight ? " tk-sub--highlight" : ""}`}
-              aria-label="Dismiss keyboard"
-              onPointerDown={(e) => handleSubButtonPointerDown(e, sub)}
-              onPointerUp={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-            >
-              {labelNode}
-            </button>
-          );
-        }
         return (
           <span
             key={dir}

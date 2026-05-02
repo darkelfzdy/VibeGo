@@ -447,6 +447,62 @@ func TestGitConflicts(t *testing.T) {
 	assert.Empty(t, resp.Conflicts)
 }
 
+func TestGitConflictDetailsAndResolveUseStdlibFileIO(t *testing.T) {
+	dir := setupGitRepoWithMultipleCommits(t)
+	defer os.RemoveAll(dir)
+	r, _ := setupRouter()
+
+	gitPath, err := exec.LookPath("git")
+	require.NoError(t, err)
+	gitOnlyDir := t.TempDir()
+	require.NoError(t, os.Symlink(gitPath, filepath.Join(gitOnlyDir, "git")))
+	originalPath := os.Getenv("PATH")
+	t.Setenv("PATH", gitOnlyDir)
+	t.Cleanup(func() {
+		require.NoError(t, os.Setenv("PATH", originalPath))
+	})
+
+	conflictContent := strings.Join([]string{
+		"prefix",
+		"<<<<<<< HEAD",
+		"ours",
+		"=======",
+		"theirs",
+		">>>>>>> branch",
+		"suffix",
+	}, "\n")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "file1.txt"), []byte(conflictContent), 0644))
+
+	w := postJSON(r, "/git/conflict-details", map[string]string{"path": dir, "filePath": "file1.txt"})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var details ConflictDetailsResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &details))
+	assert.Equal(t, "file1.txt", details.Path)
+	assert.Equal(t, 1, details.BlocksTotal)
+	require.Len(t, details.Segments, 3)
+	assert.Equal(t, []string{"ours"}, details.Segments[1].Ours)
+	assert.Equal(t, []string{"theirs"}, details.Segments[1].Theirs)
+
+	resolvedContent := "prefix\nresolved\nsuffix\n"
+	w = postJSON(r, "/git/conflict-resolve", map[string]string{
+		"path":          dir,
+		"filePath":      "file1.txt",
+		"mode":          "manual",
+		"manualContent": resolvedContent,
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	content, err := os.ReadFile(filepath.Join(dir, "file1.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, resolvedContent, string(content))
+
+	cmd := exec.Command("git", "diff", "--cached", "--name-only")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	require.NoError(t, err)
+	assert.Equal(t, "file1.txt\n", string(out))
+}
+
 func TestGitSmartSwitchBranch(t *testing.T) {
 	dir := setupGitRepoWithMultipleCommits(t)
 	defer os.RemoveAll(dir)

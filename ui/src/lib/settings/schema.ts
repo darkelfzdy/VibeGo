@@ -139,7 +139,7 @@ export const SETTINGS_SCHEMA: SettingSchema[] = [
     category: "git",
     labelKey: "settings.gitUserName.label",
     descriptionKey: "settings.gitUserName.description",
-    defaultValue: "",
+    defaultValue: "VibeGo User",
   },
   {
     key: "gitUserEmail",
@@ -147,7 +147,7 @@ export const SETTINGS_SCHEMA: SettingSchema[] = [
     category: "git",
     labelKey: "settings.gitUserEmail.label",
     descriptionKey: "settings.gitUserEmail.description",
-    defaultValue: "",
+    defaultValue: "user@vibego.local",
   },
   {
     key: "gitDefaultCommitMessage",
@@ -187,11 +187,23 @@ export const SETTINGS_SCHEMA: SettingSchema[] = [
     category: "keyboard",
     labelKey: "settings.speechAssetSource.label",
     descriptionKey: "settings.speechAssetSource.description",
-    defaultValue: "auto",
+    defaultValue: "official",
     options: [
-      { value: "auto", label: "settings.speechAssetSource.optionAuto" },
       { value: "official", label: "settings.speechAssetSource.optionOfficial" },
       { value: "china", label: "settings.speechAssetSource.optionChina" },
+    ],
+  },
+  {
+    key: "speechModel",
+    type: "select",
+    category: "keyboard",
+    labelKey: "settings.speechModel.label",
+    descriptionKey: "settings.speechModel.description",
+    defaultValue: "sense-voice",
+    options: [
+      { value: "sense-voice", label: "sense-voice-zh-en-ja-ko-yue-2024-07-17", description: "230 MB" },
+      { value: "paraformer-zh-en", label: "paraformer-zh-2023-09-14", description: "233 MB" },
+      { value: "paraformer-zh-en-small", label: "paraformer-zh-small-2024-03-09", description: "79 MB" },
     ],
   },
   {

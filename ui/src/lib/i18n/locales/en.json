@@ -324,23 +324,74 @@
       "label": "Key Sound",
       "description": "Play iOS-style key press sound when typing"
     },
+    "speechModel": {
+      "label": "Speech Model",
+      "description": "Choose the offline speech recognition model"
+    },
     "speechAssetSource": {
       "label": "Speech Download Source",
       "description": "Choose the speech model download source",
-      "optionAuto": "Auto",
-      "optionOfficial": "Official",
+      "optionOfficial": "Global",
       "optionChina": "China Mirror"
     },
     "speechAssets": {
       "label": "Speech Assets",
       "description": "Download offline speech recognition assets here before first use",
       "button": "Download Assets",
+      "deleteButton": "Delete Assets",
       "downloading": "Downloading speech recognition assets",
       "downloaded": "Speech recognition assets downloaded",
       "downloadFailed": "Failed to download speech recognition assets",
+      "deleted": "Speech recognition assets deleted",
+      "deleteFailed": "Failed to delete speech recognition assets",
       "missingTitle": "Speech assets not downloaded",
       "missingDescription": "Open Settings > Keyboard to download speech recognition assets.",
       "openSettings": "Open Settings"
+    },
+    "speech": {
+      "voice": {
+        "recognizing": "Converting speech...",
+        "releaseToCancel": "Release to cancel",
+        "releaseToSend": "Release to send",
+        "releaseToContinue": "Release to keep recording",
+        "tapToCancel": "Tap to cancel",
+        "tapToSend": "Tap to send",
+        "stop": "Stop speech input"
+      },
+      "assets": {
+        "engine": "speech engine",
+        "model": "speech model"
+      },
+      "sources": {
+        "official": "Official",
+        "china": "China Mirror"
+      },
+      "status": {
+        "checkingSource": "Checking {source}...",
+        "selectingSource": "Selecting speech download source...",
+        "sourceFailed": "{source} failed, trying another source...",
+        "loadingModel": "Loading speech model...",
+        "initializing": "Initializing...",
+        "checkingCache": "Checking cache for {label}...",
+        "loadedFromCache": "Loaded {label} from local cache.",
+        "loadingCachedAsset": "Loading {label}...",
+        "downloadingAsset": "Downloading {label}...",
+        "downloadProgress": "{label} {percent}% ({loaded}/{total}MB)",
+        "downloadLoaded": "{label} downloading... ({loaded}MB)"
+      },
+      "errors": {
+        "loadScriptFailed": "Failed to load {src}",
+        "assetsUnavailable": "Speech model assets are unavailable",
+        "noSource": "No speech download source is available",
+        "downloadFailed": "Failed to download speech assets",
+        "timeout": "Timeout",
+        "loadModelFailed": "Failed to load speech model",
+        "microphoneDenied": "Microphone denied",
+        "htmlInsteadBinary": "Server returned HTML instead of binary file for {label}. Check your proxy config.",
+        "emptyAsset": "Downloaded {label} is empty",
+        "assetHttpFailed": "Failed to download {label}: HTTP {status}",
+        "assetNetworkFailed": "Network error while downloading {label}"
+      }
     },
     "option": {
       "light": "Light",

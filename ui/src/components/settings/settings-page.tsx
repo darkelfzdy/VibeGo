@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Settings,
   Smartphone,
+  Trash2,
   Type,
   User,
   Vibrate,
@@ -20,8 +21,7 @@ import {
 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { type AsrSource, asrApi } from "@/api/asr";
-import { preloadSpeechAssets } from "@/components/keyboard/core/sherpa-asr";
+import { deleteSpeechModelAssets, preloadSpeechModel, speechAssetStates } from "@/components/keyboard/core/sherpa-asr";
 import { useFrameController } from "@/framework/frame/controller";
 import { type Locale, useTranslation } from "@/lib/i18n";
 import { getNewPageVisibilitySettingKey, isPageVisibleInNewPage } from "@/lib/page-visibility";
@@ -36,10 +36,8 @@ const SettingItem: React.FC<{
   value: string;
   onChange: (value: string) => void;
   t: (key: string) => string;
-  sourceValue?: string;
-  sourceOptions?: { value: string; label: string }[];
-  onSourceChange?: (value: string) => void;
-}> = ({ schema, value, onChange, t, sourceValue, sourceOptions, onSourceChange }) => {
+  onDeleteSpeechAssets?: () => void;
+}> = ({ schema, value, onChange, t, onDeleteSpeechAssets }) => {
   const getIcon = () => {
     switch (schema.key) {
       case "showHiddenFiles":
@@ -184,47 +182,32 @@ const SettingItem: React.FC<{
             {schema.descriptionKey && <div className="text-xs text-ide-mute">{t(schema.descriptionKey)}</div>}
           </div>
         </div>
-        {schema.key === "speechAssets" && sourceOptions && onSourceChange && (
-          <div className="flex flex-wrap gap-2 mb-3">
-            {sourceOptions.map((opt) => {
-              const label = opt.label.startsWith("settings.") ? t(opt.label) : opt.label;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => onSourceChange(opt.value)}
-                  className={`px-3 py-1.5 text-xs rounded-md border transition-all ${
-                    sourceValue === opt.value
-                      ? "bg-ide-accent text-ide-bg border-ide-accent"
-                      : "bg-ide-panel text-ide-text border-ide-border hover:border-ide-accent"
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={() => onChange("run")}
-          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs border rounded-md transition-all bg-ide-panel text-ide-text border-ide-border hover:border-ide-accent"
-        >
-          <Download size={14} />
-          {t("settings.speechAssets.button")}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => onChange("run")}
+            className="inline-flex items-center gap-2 px-3 py-1.5 text-xs border rounded-md transition-all bg-ide-panel text-ide-text border-ide-border hover:border-ide-accent"
+          >
+            <Download size={14} />
+            {t("settings.speechAssets.button")}
+          </button>
+          {schema.key === "speechAssets" && onDeleteSpeechAssets && (
+            <button
+              type="button"
+              onClick={onDeleteSpeechAssets}
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-xs border rounded-md transition-all bg-ide-panel text-red-500 border-ide-border hover:border-red-500"
+            >
+              <Trash2 size={14} />
+              {t("settings.speechAssets.deleteButton")}
+            </button>
+          )}
+        </div>
       </div>
     );
   }
 
   return null;
 };
-
-function speechSourceLabel(source: AsrSource): string {
-  if (source.id === "official") return "settings.speechAssetSource.optionOfficial";
-  if (source.id === "china") return "settings.speechAssetSource.optionChina";
-  return source.label || source.id;
-}
 
 const SettingsPage: React.FC = () => {
   const settings = useSettingsStore((s) => s.settings);
@@ -238,49 +221,65 @@ const SettingsPage: React.FC = () => {
   const settingsGroup = useFrameStore((s) => s.groups.find((group) => group.type === "settings"));
   const setSettingsActiveCategory = useFrameStore((s) => s.setSettingsActiveCategory);
 
-  const [downloadingSpeechAssets, setDownloadingSpeechAssets] = useState(false);
-  const [speechSources, setSpeechSources] = useState<AsrSource[]>([]);
+  const [speechAssetState, setSpeechAssetState] = useState<Record<string, boolean>>({});
+  const [speechAssetBusy, setSpeechAssetBusy] = useState<Record<string, boolean>>({});
   const activeTab = settingsGroup?.activeCategory || SETTING_CATEGORIES[0].key;
   const toolPages = useMemo(() => pageRegistry.getAll().filter((page) => page.category === "tool"), []);
-  const speechSourceOptions = useMemo(() => {
-    if (speechSources.length === 0) {
-      return [
-        { value: "auto", label: "settings.speechAssetSource.optionAuto" },
-        { value: "official", label: "settings.speechAssetSource.optionOfficial" },
-        { value: "china", label: "settings.speechAssetSource.optionChina" },
-      ];
-    }
-    const sourceOptions = speechSources
-      .filter((source) => source.id)
-      .map((source) => ({ value: source.id, label: speechSourceLabel(source) }));
-    return [{ value: "auto", label: "settings.speechAssetSource.optionAuto" }, ...sourceOptions];
-  }, [speechSources]);
+  const speechModelSchema = useMemo(
+    () => getSettingsByCategory("keyboard").find((schema) => schema.key === "speechModel"),
+    []
+  );
+  const speechSource = settings.speechAssetSource === "china" ? "china" : "official";
 
   const handleSettingChange = async (key: string, value: string) => {
-    if (key === "speechAssets") {
-      if (downloadingSpeechAssets) return;
-      setDownloadingSpeechAssets(true);
-      toast.loading(t("settings.speechAssets.downloading"), { id: "speech-assets-download" });
-      try {
-        await preloadSpeechAssets((status, progress) => {
-          if (status === "loading") {
-            toast.loading(progress || t("settings.speechAssets.downloading"), { id: "speech-assets-download" });
-          }
-        });
-        toast.success(t("settings.speechAssets.downloaded"), { id: "speech-assets-download" });
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : t("settings.speechAssets.downloadFailed"), {
-          id: "speech-assets-download",
-        });
-      } finally {
-        setDownloadingSpeechAssets(false);
-      }
-      return;
-    }
     if (key === "terminalDesktopNotifications" && value === "true") {
       void requestTerminalNotificationPermission();
     }
     void updateSetting(key, value);
+  };
+
+  const refreshSpeechAssetState = async () => {
+    try {
+      setSpeechAssetState(await speechAssetStates(speechSource));
+    } catch {
+      setSpeechAssetState({});
+    }
+  };
+
+  const handleDownloadSpeechModel = async (model: string) => {
+    if (speechAssetBusy[model]) return;
+    setSpeechAssetBusy((state) => ({ ...state, [model]: true }));
+    const toastID = `speech-assets-download-${model}`;
+    toast.loading(t("settings.speechAssets.downloading"), { id: toastID });
+    try {
+      await preloadSpeechModel(model, speechSource, (status, progress) => {
+        if (status === "loading") {
+          toast.loading(progress || t("settings.speechAssets.downloading"), { id: toastID });
+        }
+      });
+      toast.success(t("settings.speechAssets.downloaded"), { id: toastID });
+      await refreshSpeechAssetState();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("settings.speechAssets.downloadFailed"), {
+        id: toastID,
+      });
+    } finally {
+      setSpeechAssetBusy((state) => ({ ...state, [model]: false }));
+    }
+  };
+
+  const handleDeleteSpeechModel = async (model: string) => {
+    if (speechAssetBusy[model]) return;
+    setSpeechAssetBusy((state) => ({ ...state, [model]: true }));
+    try {
+      await deleteSpeechModelAssets(model, speechSource);
+      toast.success(t("settings.speechAssets.deleted"));
+      await refreshSpeechAssetState();
+    } catch {
+      toast.error(t("settings.speechAssets.deleteFailed"));
+    } finally {
+      setSpeechAssetBusy((state) => ({ ...state, [model]: false }));
+    }
   };
 
   const handleTestNotification = () => {
@@ -308,13 +307,8 @@ const SettingsPage: React.FC = () => {
   }, [initSettings]);
 
   useEffect(() => {
-    void asrApi
-      .info()
-      .then((info) => {
-        if (Array.isArray(info.sources)) setSpeechSources(info.sources);
-      })
-      .catch(() => setSpeechSources([]));
-  }, []);
+    if (!loading) void refreshSpeechAssetState();
+  }, [loading, speechSource]);
 
   const topBarCenterContent = useMemo(
     () => (
@@ -363,7 +357,65 @@ const SettingsPage: React.FC = () => {
     );
   }
 
-  const categorySettings = getSettingsByCategory(activeTab).filter((schema) => schema.key !== "speechAssetSource");
+  const categorySettings = getSettingsByCategory(activeTab).filter((schema) => schema.key !== "speechAssets");
+  const renderSpeechModelCard = () => {
+    if (!speechModelSchema?.options) return null;
+    const selectedModel = settings.speechModel || speechModelSchema.defaultValue;
+    return (
+      <div className="p-4 bg-ide-bg rounded-lg border border-ide-border">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="text-ide-mute">
+            <CloudDownload size={18} />
+          </div>
+          <div>
+            <div className="text-sm font-medium text-ide-text">{t("settings.speechModel.label")}</div>
+            <div className="text-xs text-ide-mute">{t("settings.speechModel.description")}</div>
+          </div>
+        </div>
+        <div className="space-y-2">
+          {speechModelSchema.options.map((opt) => {
+            const downloaded = Boolean(speechAssetState[opt.value]);
+            const busy = Boolean(speechAssetBusy[opt.value]);
+            const selected = selectedModel === opt.value;
+            return (
+              <div
+                key={opt.value}
+                className={`flex items-center justify-between gap-3 px-3 py-2 rounded-md border transition-all ${
+                  selected ? "border-ide-accent bg-ide-accent/10" : "border-ide-border bg-ide-panel/60"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => void handleSettingChange("speechModel", opt.value)}
+                  className="min-w-0 flex-1 text-left text-xs text-ide-text"
+                >
+                  <span className="block truncate">{opt.label}</span>
+                  {opt.description && (
+                    <span className="block text-[11px] leading-4 text-ide-mute">{opt.description}</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    downloaded ? void handleDeleteSpeechModel(opt.value) : void handleDownloadSpeechModel(opt.value)
+                  }
+                  className={`h-7 w-7 shrink-0 inline-flex items-center justify-center rounded-md border transition-all ${
+                    downloaded
+                      ? "text-red-500 border-ide-border hover:border-red-500 bg-ide-bg"
+                      : "text-ide-text border-ide-border hover:border-ide-accent bg-ide-bg"
+                  } disabled:opacity-60`}
+                  title={downloaded ? t("settings.speechAssets.deleteButton") : t("settings.speechAssets.button")}
+                >
+                  {downloaded ? <Trash2 size={14} /> : <Download size={14} />}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
   const renderNotificationTab = () => (
     <div className="p-4 bg-ide-bg rounded-lg border border-ide-border">
       <div className="flex items-center gap-3 mb-3">
@@ -453,22 +505,19 @@ const SettingsPage: React.FC = () => {
             ? renderNotificationTab()
             : activeTab === "page"
               ? renderPageTab()
-              : categorySettings.map((schema) => (
-                  <SettingItem
-                    key={schema.key}
-                    schema={schema}
-                    value={settings[schema.key] || schema.defaultValue}
-                    onChange={(v) => void handleSettingChange(schema.key, v)}
-                    t={t}
-                    sourceValue={settings.speechAssetSource || "auto"}
-                    sourceOptions={schema.key === "speechAssets" ? speechSourceOptions : undefined}
-                    onSourceChange={
-                      schema.key === "speechAssets"
-                        ? (v) => void handleSettingChange("speechAssetSource", v)
-                        : undefined
-                    }
-                  />
-                ))}
+              : categorySettings.map((schema) =>
+                  schema.key === "speechModel" ? (
+                    <React.Fragment key={schema.key}>{renderSpeechModelCard()}</React.Fragment>
+                  ) : (
+                    <SettingItem
+                      key={schema.key}
+                      schema={schema}
+                      value={settings[schema.key] || schema.defaultValue}
+                      onChange={(v) => void handleSettingChange(schema.key, v)}
+                      t={t}
+                    />
+                  )
+                )}
         </div>
       </div>
     </div>

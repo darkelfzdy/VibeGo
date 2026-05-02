@@ -42,7 +42,8 @@ func TestSettingsList(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var result map[string]string
 	json.Unmarshal(w.Body.Bytes(), &result)
-	assert.Empty(t, result)
+	assert.NotEmpty(t, result["gitUserName"])
+	assert.NotEmpty(t, result["gitUserEmail"])
 }
 
 func TestSettingsSetAndGet(t *testing.T) {
@@ -75,6 +76,20 @@ func TestSettingsGetNotFound(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestSettingsGetGitDefault(t *testing.T) {
+	_, r := setupTestSettingsHandler(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/settings/get?key=gitUserName", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var result map[string]string
+	json.Unmarshal(w.Body.Bytes(), &result)
+	assert.Equal(t, "gitUserName", result["key"])
+	assert.NotEmpty(t, result["value"])
 }
 
 func TestSettingsGetMissingKey(t *testing.T) {
@@ -119,7 +134,8 @@ func TestSettingsReset(t *testing.T) {
 
 	var result map[string]string
 	json.Unmarshal(w.Body.Bytes(), &result)
-	assert.Empty(t, result)
+	assert.NotEmpty(t, result["gitUserName"])
+	assert.NotEmpty(t, result["gitUserEmail"])
 }
 
 func TestSettingsDelete(t *testing.T) {
@@ -166,7 +182,9 @@ func TestSettingsListWithData(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var result map[string]string
 	json.Unmarshal(w.Body.Bytes(), &result)
-	assert.Len(t, result, 2)
+	assert.Len(t, result, 4)
 	assert.Equal(t, "1", result["a"])
 	assert.Equal(t, "2", result["b"])
+	assert.NotEmpty(t, result["gitUserName"])
+	assert.NotEmpty(t, result["gitUserEmail"])
 }

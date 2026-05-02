@@ -1,4 +1,4 @@
-import { ArrowUp, AudioLines, Mic, MoreVertical, Undo2 } from "lucide-react";
+import { ArrowUp, AudioLines, MoreVertical, Undo2 } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { keyFeedback } from "@/components/keyboard/core/key-feedback";
@@ -29,6 +29,8 @@ interface KeyboardProps {
 const INITIAL_MOD = { active: false, locked: false };
 
 const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_QWERTY }) => {
+  const locale = useSettingsStore((s) => (s.settings.locale === "en" ? "en" : "zh"));
+  const t = useMemo(() => (key: string) => getTranslation(locale, key), [locale]);
   const [modifiers, setModifiers] = useState<ModifiersState>({
     ctrl: { ...INITIAL_MOD },
     alt: { ...INITIAL_MOD },
@@ -40,7 +42,8 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
 
   const [asrStatus, setAsrStatus] = useState<SherpaStatus>("idle");
   const [asrProgress, setAsrProgress] = useState("");
-  const [voiceTarget, setVoiceTarget] = useState<VoiceReleaseTarget>("commit");
+  const [voiceTarget, setVoiceTarget] = useState<VoiceReleaseTarget>("none");
+  const [voiceHold, setVoiceHold] = useState(false);
   const recordingRef = useRef(false);
   const startingRecordingRef = useRef(false);
   const pendingRecordingActionRef = useRef<"commit" | "cancel" | null>(null);
@@ -91,6 +94,8 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
       if (mode === "cancel") cancelRecording();
       setAsrStatus("idle");
       setAsrProgress("");
+      setVoiceHold(false);
+      setVoiceTarget("none");
       pendingRecordingActionRef.current = null;
       if (text) emitText(text);
     },
@@ -133,13 +138,15 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
   const handleMicToggle = useCallback(
     async (action?: "start" | "stop" | "cancel" | "continue") => {
       if (action === "start") {
-        setVoiceTarget("commit");
+        setVoiceTarget("none");
+        setVoiceHold(false);
         await startMicInput();
         return;
       }
 
       if (action === "continue") {
         setVoiceTarget("continue");
+        setVoiceHold(true);
         return;
       }
 
@@ -283,6 +290,7 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
     <div
       className={`tk-keyboard${showVoicePanel ? " tk-keyboard--recording" : ""}`}
       data-voice-target={voiceTarget}
+      data-voice-hold={voiceHold ? "true" : "false"}
       onPointerDown={(e) => e.preventDefault()}
       onMouseDown={(e) => e.preventDefault()}
       onContextMenu={(e) => e.preventDefault()}
@@ -294,29 +302,62 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
         </div>
       )}
       {showVoicePanel && (
-        <div className="tk-voice-overlay">
+        <div
+          className="tk-voice-overlay"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onPointerUp={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
           <div className="tk-voice-status">
             {asrStatus === "recognizing"
-              ? "语音转文字中..."
+              ? t("settings.speech.voice.recognizing")
               : voiceTarget === "cancel"
-                ? "松手取消"
-                : voiceTarget === "commit"
-                  ? "松手发送"
-                  : "松手继续识别"}
-          </div>
-          <div className="tk-voice-mic">
-            <Mic size={20} strokeWidth={2.4} />
+                ? t("settings.speech.voice.releaseToCancel")
+                : voiceTarget === "continue"
+                  ? t("settings.speech.voice.releaseToContinue")
+                  : t("settings.speech.voice.releaseToSend")}
           </div>
           <div className="tk-voice-actions">
-            <div className="tk-voice-action tk-voice-action--cancel">
+            <div
+              className="tk-voice-action tk-voice-action--cancel"
+              aria-hidden={!voiceHold}
+              onPointerDown={
+                voiceHold
+                  ? (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (asrStatus !== "recognizing") handleMicToggle("cancel");
+                    }
+                  : undefined
+              }
+            >
               <Undo2 size={24} strokeWidth={2.3} />
+              {voiceHold && <span className="tk-voice-action-label">{t("settings.speech.voice.tapToCancel")}</span>}
             </div>
-            <div className="tk-voice-action tk-voice-action--continue">
+            <div className="tk-voice-action tk-voice-action--continue" aria-hidden="true">
               <AudioLines size={26} strokeWidth={2.2} />
             </div>
-            <div className="tk-voice-action tk-voice-action--commit">
+            <div
+              className="tk-voice-action tk-voice-action--commit"
+              aria-hidden={!voiceHold}
+              onPointerDown={
+                voiceHold
+                  ? (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (asrStatus !== "recognizing") handleMicToggle("stop");
+                    }
+                  : undefined
+              }
+            >
               <ArrowUp size={26} strokeWidth={2.3} />
               <MoreVertical size={12} strokeWidth={3} />
+              {voiceHold && <span className="tk-voice-action-label">{t("settings.speech.voice.tapToSend")}</span>}
             </div>
           </div>
         </div>
@@ -565,7 +606,21 @@ export const Keyboard: React.FC = () => {
 
       let targetCursor = -1;
 
-      if (action.type === "input") {
+      if (e.value === "Backspace") {
+        if (activeInput) {
+          const start = activeInput.selectionStart ?? 0;
+          const end = activeInput.selectionEnd ?? 0;
+          targetCursor = start !== end ? start : Math.max(0, start - 1);
+        }
+        document.execCommand("delete");
+      } else if (e.value === "Delete") {
+        if (activeInput) {
+          const start = activeInput.selectionStart ?? 0;
+          const end = activeInput.selectionEnd ?? 0;
+          targetCursor = start !== end ? start : start;
+        }
+        document.execCommand("forwardDelete");
+      } else if (action.type === "input") {
         if (activeInput) targetCursor = (activeInput.selectionStart ?? 0) + action.data.length;
         document.execCommand("insertText", false, action.data);
       } else if (action.type === "copy") {
@@ -594,20 +649,6 @@ export const Keyboard: React.FC = () => {
         } else {
           document.execCommand("selectAll");
         }
-      } else if (e.value === "Backspace") {
-        if (activeInput) {
-          const start = activeInput.selectionStart ?? 0;
-          const end = activeInput.selectionEnd ?? 0;
-          targetCursor = start !== end ? start : Math.max(0, start - 1);
-        }
-        document.execCommand("delete");
-      } else if (e.value === "Delete") {
-        if (activeInput) {
-          const start = activeInput.selectionStart ?? 0;
-          const end = activeInput.selectionEnd ?? 0;
-          targetCursor = start !== end ? start : start;
-        }
-        document.execCommand("forwardDelete");
       }
 
       if (activeInput && targetCursor !== -1) {

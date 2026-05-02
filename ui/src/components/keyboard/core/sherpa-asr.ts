@@ -1,6 +1,7 @@
 import { type AsrInfo, type AsrSource, asrApi } from "@/api/asr";
+import { getTranslation, type Locale } from "@/lib/i18n";
 import { useSettingsStore } from "@/lib/settings";
-import { fetchBinaryAsset, hasBinaryAsset } from "./sherpa-asset";
+import { deleteBinaryAsset, fetchBinaryAsset, hasBinaryAsset } from "./sherpa-asset";
 
 export type SherpaStatus = "idle" | "loading" | "recording" | "recognizing" | "error";
 export type SherpaResultCallback = (text: string) => void;
@@ -23,6 +24,7 @@ let sherpaDataUrl = "";
 let sherpaSources: AsrSource[] = [];
 let selectedSpeechSource: AsrSource | null = null;
 let selectedSpeechSourcePreference = "";
+let loadedSpeechSourcePreference = "";
 let moduleLoaded = false;
 let moduleLoadingPromise: Promise<void> | null = null;
 let binaryAssetsPromise: Promise<{ wasmBinary: ArrayBuffer; dataPackage: ArrayBuffer }> | null = null;
@@ -41,12 +43,32 @@ let recordSampleRate = 0;
 let recordedChunks: Float32Array[] = [];
 let statusCb: ((status: SherpaStatus, progress?: string) => void) | null = null;
 
+function currentLocale(): Locale {
+  return ((useSettingsStore.getState().settings.locale || "zh") as Locale) === "en" ? "en" : "zh";
+}
+
+function t(key: string, vars?: Record<string, string>): string {
+  let value = getTranslation(currentLocale(), key);
+  if (vars) {
+    for (const [name, replacement] of Object.entries(vars)) {
+      value = value.replaceAll(`{${name}}`, replacement);
+    }
+  }
+  return value;
+}
+
+function sourceLabel(source: AsrSource): string {
+  if (source.region === "china") return `${source.label} ${t("settings.speech.sources.china")}`;
+  if (source.region === "global") return `${source.label} ${t("settings.speech.sources.official")}`;
+  return source.label;
+}
+
 function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const script = document.createElement("script");
     script.src = src;
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    script.onerror = () => reject(new Error(t("settings.speech.errors.loadScriptFailed", { src })));
     document.head.appendChild(script);
   });
 }
@@ -66,6 +88,7 @@ function normalizeSource(source: AsrSource): AsrSource | null {
   return {
     id,
     label: (source.label || id).trim(),
+    model: (source.model || "").trim().toLowerCase(),
     region: source.region,
     baseUrl: baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`,
     wasmUrl,
@@ -87,7 +110,16 @@ function sourcesFromInfo(info: AsrInfo): AsrSource[] {
 }
 
 function preferredSpeechSource(): string {
-  return (useSettingsStore.getState().settings.speechAssetSource || "auto").trim().toLowerCase() || "auto";
+  const settings = useSettingsStore.getState().settings;
+  const model = (settings.speechModel || "sense-voice").trim().toLowerCase() || "sense-voice";
+  const rawSource = (settings.speechAssetSource || "official").trim().toLowerCase() || "official";
+  const source = rawSource === "china" ? "china" : "official";
+  return `${model}-${source}`;
+}
+
+function speechSourceID(model: string, source: string): string {
+  const nextSource = source === "china" ? "china" : "official";
+  return `${model || "sense-voice"}-${nextSource}`;
 }
 
 async function ensureAssetInfo(): Promise<void> {
@@ -97,11 +129,11 @@ async function ensureAssetInfo(): Promise<void> {
   assetInfoLoading = (async () => {
     const info = await asrApi.info();
     if (!info.enabled) {
-      throw new Error(info.message || "Speech model assets are unavailable");
+      throw new Error(info.message || t("settings.speech.errors.assetsUnavailable"));
     }
     sherpaSources = sourcesFromInfo(info);
     if (sherpaSources.length === 0) {
-      throw new Error(info.message || "Speech model assets are unavailable");
+      throw new Error(info.message || t("settings.speech.errors.assetsUnavailable"));
     }
     sherpaVersion = info.version || "dev";
   })();
@@ -162,6 +194,29 @@ function applySpeechSource(source: AsrSource, preference: string) {
   sherpaDataUrl = source.dataUrl;
 }
 
+function resetLoadedModule() {
+  stopCapture();
+  try {
+    recognizer?.free?.();
+  } catch {}
+  try {
+    vad?.free?.();
+  } catch {}
+  vad = null;
+  recognizer = null;
+  moduleLoaded = false;
+  moduleLoadingPromise = null;
+  binaryAssetsPromise = null;
+  loadedSpeechSourcePreference = "";
+  recordedChunks = [];
+}
+
+function localSpeechSource(preference: string): AsrSource | null {
+  const preferred = sherpaSources.find((source) => source.id === preference);
+  if (preferred) return preferred;
+  return selectedSpeechSource || sherpaSources[0] || null;
+}
+
 async function ensureSelectedSource(
   onStatus?: (status: SherpaStatus, progress?: string) => void,
   failedSources = new Set<string>()
@@ -178,27 +233,26 @@ async function ensureSelectedSource(
 
   const candidates = sherpaSources.filter((source) => !failedSources.has(source.id));
   if (candidates.length === 0) {
-    throw new Error("No speech download source is available");
+    throw new Error(t("settings.speech.errors.noSource"));
   }
 
-  if (preference !== "auto") {
-    const preferred = candidates.find((source) => source.id === preference);
-    if (preferred) {
-      onStatus?.("loading", `Checking ${preferred.label}...`);
-      if ((await probeSource(preferred)) !== null) {
-        applySpeechSource(preferred, preference);
-        return preferred;
-      }
-      failedSources.add(preferred.id);
+  const preferred = candidates.find((source) => source.id === preference);
+  if (preferred) {
+    onStatus?.("loading", t("settings.speech.status.checkingSource", { source: sourceLabel(preferred) }));
+    if ((await probeSource(preferred)) !== null) {
+      applySpeechSource(preferred, preference);
+      return preferred;
     }
+    failedSources.add(preferred.id);
   }
 
-  const remaining = sherpaSources.filter((source) => !failedSources.has(source.id));
+  const preferredModel = preference.replace(/-(official|china)$/, "");
+  const remaining = sherpaSources.filter((source) => source.model === preferredModel && !failedSources.has(source.id));
   if (remaining.length === 0) {
-    throw new Error("No speech download source is available");
+    throw new Error(t("settings.speech.errors.noSource"));
   }
 
-  onStatus?.("loading", "Selecting speech download source...");
+  onStatus?.("loading", t("settings.speech.status.selectingSource"));
   const fastest = await fastestSource(remaining);
   const selected = fastest || remaining[0];
   applySpeechSource(selected, preference);
@@ -207,9 +261,15 @@ async function ensureSelectedSource(
 
 export async function hasRequiredSpeechAssets(): Promise<boolean> {
   await ensureAssetInfo();
+  const cachedSource = localSpeechSource(preferredSpeechSource());
+  if (!cachedSource) return false;
+  return hasSpeechAssetsForSource(cachedSource);
+}
+
+async function hasSpeechAssetsForSource(source: AsrSource): Promise<boolean> {
   const [hasWasm, hasData] = await Promise.all([
-    hasBinaryAsset(sherpaVersion, "speech-engine"),
-    hasBinaryAsset(sherpaVersion, "speech-model"),
+    hasBinaryAsset(sherpaVersion, "speech-engine", source.wasmUrl),
+    hasBinaryAsset(sherpaVersion, "speech-model", source.dataUrl),
   ]);
   return hasWasm && hasData;
 }
@@ -217,6 +277,47 @@ export async function hasRequiredSpeechAssets(): Promise<boolean> {
 export async function preloadSpeechAssets(onStatus?: (status: SherpaStatus, progress?: string) => void): Promise<void> {
   await ensureAssetInfo();
   await ensureBinaryAssets(onStatus);
+}
+
+export async function speechAssetStates(source: string): Promise<Record<string, boolean>> {
+  await ensureAssetInfo();
+  const next: Record<string, boolean> = {};
+  for (const candidate of sherpaSources) {
+    if (!candidate.model || (candidate.region === "china") !== (source === "china")) continue;
+    next[candidate.model] = await hasSpeechAssetsForSource(candidate);
+  }
+  return next;
+}
+
+export async function preloadSpeechModel(
+  model: string,
+  source: string,
+  onStatus?: (status: SherpaStatus, progress?: string) => void
+): Promise<void> {
+  await ensureAssetInfo();
+  const previous = useSettingsStore.getState().settings;
+  const selected = sherpaSources.find((candidate) => candidate.id === speechSourceID(model, source));
+  if (!selected) throw new Error(t("settings.speech.errors.noSource"));
+  if (loadedSpeechSourcePreference && loadedSpeechSourcePreference !== selected.id) {
+    resetLoadedModule();
+  }
+  applySpeechSource(selected, selected.id);
+  await fetchBinaryAsset(selected.wasmUrl, sherpaVersion, "speech-engine", onStatus);
+  await fetchBinaryAsset(selected.dataUrl, sherpaVersion, "speech-model", onStatus);
+  await useSettingsStore.getState().set("speechModel", model);
+  if ((previous.speechAssetSource || "official") !== source) {
+    await useSettingsStore.getState().set("speechAssetSource", source);
+  }
+}
+
+export async function deleteSpeechModelAssets(model: string, source: string): Promise<void> {
+  await ensureAssetInfo();
+  const selected = sherpaSources.find((candidate) => candidate.id === speechSourceID(model, source));
+  if (!selected) return;
+  await Promise.all([
+    deleteBinaryAsset(sherpaVersion, "speech-engine", selected.wasmUrl),
+    deleteBinaryAsset(sherpaVersion, "speech-model", selected.dataUrl),
+  ]);
 }
 
 function assignGlobals(code: string) {
@@ -233,6 +334,22 @@ async function ensureBinaryAssets(
   if (binaryAssetsPromise) return binaryAssetsPromise;
 
   binaryAssetsPromise = (async () => {
+    await ensureAssetInfo();
+    const preference = preferredSpeechSource();
+    const cachedSource = localSpeechSource(preference);
+    const [hasWasm, hasData] = await Promise.all([
+      hasBinaryAsset(sherpaVersion, "speech-engine", cachedSource?.wasmUrl || ""),
+      hasBinaryAsset(sherpaVersion, "speech-model", cachedSource?.dataUrl || ""),
+    ]);
+    if (hasWasm && hasData && cachedSource && !failedSources.has(cachedSource.id)) {
+      applySpeechSource(cachedSource, preference);
+      const [wasmBinary, dataPackage] = await Promise.all([
+        fetchBinaryAsset(cachedSource.wasmUrl, sherpaVersion, "speech-engine", onStatus),
+        fetchBinaryAsset(cachedSource.dataUrl, sherpaVersion, "speech-model", onStatus),
+      ]);
+      return { wasmBinary, dataPackage };
+    }
+
     let lastError: unknown = null;
     while (failedSources.size < sherpaSources.length) {
       const source = await ensureSelectedSource(onStatus, failedSources);
@@ -244,10 +361,10 @@ async function ensureBinaryAssets(
         lastError = e;
         failedSources.add(source.id);
         selectedSpeechSource = null;
-        onStatus?.("loading", `${source.label} failed, trying another source...`);
+        onStatus?.("loading", t("settings.speech.status.sourceFailed", { source: sourceLabel(source) }));
       }
     }
-    throw lastError instanceof Error ? lastError : new Error("Failed to download speech assets");
+    throw lastError instanceof Error ? lastError : new Error(t("settings.speech.errors.downloadFailed"));
   })();
 
   try {
@@ -271,14 +388,20 @@ function initOfflineRecognizer() {
   const config: any = { modelConfig: { debug: 0, tokens: "./tokens.txt" } };
   if (fileExists("sense-voice.onnx")) {
     config.modelConfig.senseVoice = { model: "./sense-voice.onnx", useInverseTextNormalization: 1 };
+  } else if (fileExists("paraformer.onnx")) {
+    config.modelConfig.paraformer = { model: "./paraformer.onnx" };
   }
   recognizer = new window.OfflineRecognizer(config, window.Module);
 }
 
 export async function ensureLoaded(onStatus?: (status: SherpaStatus, progress?: string) => void): Promise<void> {
-  if (moduleLoaded) return;
+  const preference = preferredSpeechSource();
+  if (moduleLoaded && loadedSpeechSourcePreference === preference) return;
+  if (moduleLoaded && loadedSpeechSourcePreference !== preference) {
+    resetLoadedModule();
+  }
   if (moduleLoadingPromise) return moduleLoadingPromise;
-  onStatus?.("loading", "Loading speech model...");
+  onStatus?.("loading", t("settings.speech.status.loadingModel"));
 
   loadError = null;
   moduleLoadingPromise = (async () => {
@@ -288,7 +411,6 @@ export async function ensureLoaded(onStatus?: (status: SherpaStatus, progress?: 
       await ensureAssetInfo();
       while (failedSources.size < sherpaSources.length) {
         try {
-          await ensureSelectedSource(onStatus, failedSources);
           const { wasmBinary, dataPackage } = await ensureBinaryAssets(onStatus, failedSources);
           window.Module = {
             wasmBinary,
@@ -300,13 +422,14 @@ export async function ensureLoaded(onStatus?: (status: SherpaStatus, progress?: 
             },
             setStatus(status: string) {
               if (status === "Running...") {
-                onStatus?.("loading", "Initializing...");
+                onStatus?.("loading", t("settings.speech.status.initializing"));
               }
             },
             onRuntimeInitialized() {
               vad = window.createVad(window.Module);
               initOfflineRecognizer();
               moduleLoaded = true;
+              loadedSpeechSourcePreference = selectedSpeechSourcePreference;
             },
           };
 
@@ -319,7 +442,7 @@ export async function ensureLoaded(onStatus?: (status: SherpaStatus, progress?: 
           await new Promise<void>((resolve, reject) => {
             const timeout = setTimeout(() => {
               if (!moduleLoaded) {
-                loadError = "Timeout";
+                loadError = t("settings.speech.errors.timeout");
                 reject(new Error(loadError));
               }
             }, 300000);
@@ -336,7 +459,10 @@ export async function ensureLoaded(onStatus?: (status: SherpaStatus, progress?: 
           lastError = e;
           if (selectedSpeechSource) {
             failedSources.add(selectedSpeechSource.id);
-            onStatus?.("loading", `${selectedSpeechSource.label} failed, trying another source...`);
+            onStatus?.(
+              "loading",
+              t("settings.speech.status.sourceFailed", { source: sourceLabel(selectedSpeechSource) })
+            );
           }
           selectedSpeechSource = null;
           moduleLoaded = false;
@@ -344,7 +470,7 @@ export async function ensureLoaded(onStatus?: (status: SherpaStatus, progress?: 
           recognizer = null;
         }
       }
-      loadError = lastError instanceof Error ? lastError.message : "Failed to load speech model";
+      loadError = lastError instanceof Error ? lastError.message : t("settings.speech.errors.loadModelFailed");
       throw lastError instanceof Error ? lastError : new Error(loadError);
     } finally {
       moduleLoadingPromise = null;
@@ -449,7 +575,7 @@ export async function startRecording(onStatus: (status: SherpaStatus, progress?:
   try {
     await ensureLoaded(onStatus);
   } catch (e) {
-    onStatus("error", (e as Error).message || "Failed to load model");
+    onStatus("error", (e as Error).message || t("settings.speech.errors.loadModelFailed"));
     statusCb = null;
     return;
   }
@@ -475,7 +601,7 @@ export async function startRecording(onStatus: (status: SherpaStatus, progress?:
     recorder.connect(audioCtx.destination);
     onStatus("recording");
   } catch {
-    onStatus("error", "Microphone denied");
+    onStatus("error", t("settings.speech.errors.microphoneDenied"));
     statusCb = null;
   }
 }

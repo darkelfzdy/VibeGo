@@ -2,11 +2,15 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/xxnuo/vibego/internal/service/settings"
 	"gorm.io/gorm"
 )
+
+const defaultGitUserName = "VibeGo User"
+const defaultGitUserEmail = "user@vibego.local"
 
 type SettingsHandler struct {
 	store *settings.Store
@@ -39,6 +43,7 @@ func (h *SettingsHandler) List(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	applyGitSettingDefaults(all)
 	c.JSON(http.StatusOK, all)
 }
 
@@ -89,6 +94,10 @@ func (h *SettingsHandler) Get(c *gin.Context) {
 	}
 	val, err := h.store.Get(key)
 	if err != nil {
+		if defaultValue, ok := gitSettingDefault(key); ok {
+			c.JSON(http.StatusOK, gin.H{"key": key, "value": defaultValue})
+			return
+		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "key not found"})
 		return
 	}
@@ -122,4 +131,51 @@ func (h *SettingsHandler) Delete(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func applyGitSettingDefaults(values map[string]string) {
+	if values["gitUserName"] == "" {
+		values["gitUserName"] = defaultGitUserNameValue()
+	}
+	if values["gitUserEmail"] == "" {
+		values["gitUserEmail"] = defaultGitUserEmailValue()
+	}
+}
+
+func gitSettingDefault(key string) (string, bool) {
+	switch key {
+	case "gitUserName":
+		return defaultGitUserNameValue(), true
+	case "gitUserEmail":
+		return defaultGitUserEmailValue(), true
+	default:
+		return "", false
+	}
+}
+
+func defaultGitUserNameValue() string {
+	if value := readGitConfig("user.name"); value != "" {
+		return value
+	}
+	return defaultGitUserName
+}
+
+func defaultGitUserEmailValue() string {
+	if value := readGitConfig("user.email"); value != "" {
+		return value
+	}
+	return defaultGitUserEmail
+}
+
+func readGitConfig(key string) string {
+	for _, args := range [][]string{{"config", "--global", "--get", key}, {"config", "--get", key}} {
+		cmd := newGitCommand(args...)
+		output, err := cmd.Output()
+		if err == nil {
+			if value := strings.TrimSpace(string(output)); value != "" {
+				return value
+			}
+		}
+	}
+	return ""
 }

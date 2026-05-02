@@ -10,6 +10,10 @@ const DefaultVersion = "1.12.36"
 const defaultOfficialRevision = "946a732f862b70f4cd1ab094abd907c01f1ccff8"
 const defaultOfficialBaseURL = "https://huggingface.co/spaces/k2-fsa/web-assembly-vad-asr-sherpa-onnx-zh-en-ja-ko-cantonese-sense-voice/resolve/" + defaultOfficialRevision + "/"
 const defaultChinaBaseURL = "https://hf-mirror.com/spaces/k2-fsa/web-assembly-vad-asr-sherpa-onnx-zh-en-ja-ko-cantonese-sense-voice/resolve/" + defaultOfficialRevision + "/"
+const defaultParaformerBaseURL = "https://huggingface.co/spaces/k2-fsa/web-assembly-vad-asr-sherpa-onnx-zh-en-paraformer/resolve/main/"
+const defaultParaformerChinaBaseURL = "https://hf-mirror.com/spaces/k2-fsa/web-assembly-vad-asr-sherpa-onnx-zh-en-paraformer/resolve/main/"
+const defaultParaformerSmallBaseURL = "https://huggingface.co/spaces/k2-fsa/web-assembly-vad-asr-sherpa-onnx-zh-en-paraformer-small/resolve/main/"
+const defaultParaformerSmallChinaBaseURL = "https://hf-mirror.com/spaces/k2-fsa/web-assembly-vad-asr-sherpa-onnx-zh-en-paraformer-small/resolve/main/"
 const defaultWasmFile = "sherpa-onnx-wasm-main-vad-asr.wasm"
 const defaultDataFile = "sherpa-onnx-wasm-main-vad-asr.data"
 const defaultVadScriptFile = "sherpa-onnx-vad.js"
@@ -27,6 +31,7 @@ type Config struct {
 type Source struct {
 	ID      string `json:"id"`
 	Label   string `json:"label"`
+	Model   string `json:"model,omitempty"`
 	Region  string `json:"region,omitempty"`
 	BaseURL string `json:"baseUrl"`
 	WasmURL string `json:"wasmUrl"`
@@ -106,6 +111,7 @@ func discover(cfg Config) Info {
 		src := Source{
 			ID:      "custom",
 			Label:   "Custom",
+			Model:   "custom",
 			Region:  "custom",
 			BaseURL: defaultOfficialBaseURL,
 			WasmURL: defaultOfficialBaseURL + defaultWasmFile,
@@ -152,8 +158,12 @@ func discover(cfg Config) Info {
 
 func defaultSources() []Source {
 	return []Source{
-		buildSource("official", "Official", "global", defaultOfficialBaseURL),
-		buildSource("china", "China Mirror", "china", defaultChinaBaseURL),
+		buildSource("sense-voice-official", "sense-voice-zh-en-ja-ko-yue-2024-07-17", "sense-voice", "global", defaultOfficialBaseURL),
+		buildSource("sense-voice-china", "sense-voice-zh-en-ja-ko-yue-2024-07-17", "sense-voice", "china", defaultChinaBaseURL),
+		buildSource("paraformer-zh-en-official", "paraformer-zh-2023-09-14", "paraformer-zh-en", "global", defaultParaformerBaseURL),
+		buildSource("paraformer-zh-en-china", "paraformer-zh-2023-09-14", "paraformer-zh-en", "china", defaultParaformerChinaBaseURL),
+		buildSource("paraformer-zh-en-small-official", "paraformer-zh-small-2024-03-09", "paraformer-zh-en-small", "global", defaultParaformerSmallBaseURL),
+		buildSource("paraformer-zh-en-small-china", "paraformer-zh-small-2024-03-09", "paraformer-zh-en-small", "china", defaultParaformerSmallChinaBaseURL),
 	}
 }
 
@@ -164,6 +174,7 @@ func proxySources(sources []Source) []Source {
 		proxied = append(proxied, Source{
 			ID:      source.ID,
 			Label:   source.Label,
+			Model:   source.Model,
 			Region:  source.Region,
 			BaseURL: baseURL,
 			WasmURL: baseURL + defaultWasmFile,
@@ -181,11 +192,12 @@ func selectProxySource(sources []Source, selected string) (Source, bool) {
 	return *source, true
 }
 
-func buildSource(id string, label string, region string, baseURL string) Source {
+func buildSource(id string, label string, model string, region string, baseURL string) Source {
 	baseURL = normalizeBaseURL(baseURL)
 	return Source{
 		ID:      strings.TrimSpace(id),
 		Label:   strings.TrimSpace(label),
+		Model:   strings.TrimSpace(model),
 		Region:  strings.TrimSpace(region),
 		BaseURL: baseURL,
 		WasmURL: baseURL + defaultWasmFile,
@@ -218,6 +230,7 @@ func parseExtraSources(raw string) []Source {
 func normalizeSource(src Source) Source {
 	src.ID = normalizedSource(src.ID)
 	src.Label = strings.TrimSpace(src.Label)
+	src.Model = normalizedSource(src.Model)
 	src.Region = strings.TrimSpace(src.Region)
 	src.BaseURL = normalizeBaseURL(src.BaseURL)
 	src.WasmURL = strings.TrimSpace(src.WasmURL)
