@@ -1,4 +1,4 @@
-.PHONY: generate-docs clean-code format dev-server dev-ui build build-frontend build-backend package-backend build-release prepare-test test download-sherpa
+.PHONY: generate-docs clean-code format dev-server dev-ui build clean-dist build-frontend build-backend package-backend build-release prepare-test test download-sherpa
 
 VERSION ?= $(shell git describe --tags --match 'v*' 2>/dev/null || echo v0.0.0-dev)
 DIST_DIR ?= dist
@@ -27,12 +27,23 @@ dev-server:
 dev-ui:
 	cd ui && pnpm run dev --host
 
-build: build-frontend
+build:
+	$(MAKE) clean-dist
+	$(MAKE) build-frontend
 	$(MAKE) build-backend GOOS=$(CURRENT_GOOS) GOARCH=$(CURRENT_GOARCH) VERSION=$(VERSION)
 	$(MAKE) package-backend GOOS=$(CURRENT_GOOS) GOARCH=$(CURRENT_GOARCH) VERSION=$(VERSION)
 
 download-sherpa:
 	@bash scripts/download-sherpa.sh
+
+clean-dist:
+	@dist_dir="$(DIST_DIR)"; \
+	if [ -z "$$dist_dir" ] || [ "$$dist_dir" = "/" ] || [ "$$dist_dir" = "." ] || [ "$$dist_dir" = ".." ]; then \
+		echo "Refusing to clean unsafe DIST_DIR: $$dist_dir"; \
+		exit 1; \
+	fi; \
+	mkdir -p "$$dist_dir"; \
+	find "$$dist_dir" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
 build-frontend:
 	cd $(UI_DIR) && pnpm install --frozen-lockfile
@@ -60,7 +71,9 @@ package-backend:
 	tar_name="$${bin%.exe}.tar.gz"; \
 	tar -C $(DIST_DIR) -czf "$(ARTIFACTS_DIR)/$${tar_name}" "$${bin}"
 
-build-release: build-frontend
+build-release:
+	$(MAKE) clean-dist
+	$(MAKE) build-frontend
 	@for target in $(RELEASE_TARGETS); do \
 		goos="$${target%/*}"; \
 		goarch="$${target#*/}"; \
