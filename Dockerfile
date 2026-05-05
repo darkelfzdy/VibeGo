@@ -11,4 +11,4 @@ WORKDIR /home/project
 EXPOSE 1984
 
 # 启动服务
-CMD ["vibego", "--no-tls", "-k", "123456"]
+CMD ["vibego", "--no-tls"]
